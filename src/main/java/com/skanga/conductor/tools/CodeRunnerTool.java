@@ -1,0 +1,205 @@
+package com.skanga.conductor.tools;
+
+import com.skanga.conductor.config.ApplicationConfig;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.time.Duration;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+/**
+ * Secure command execution tool with injection attack prevention.
+ * <p>
+ * This tool provides safe command execution capabilities with comprehensive
+ * security measures to prevent command injection attacks and resource abuse.
+ * Key security features include:
+ * </p>
+ * <ul>
+ * <li>Command whitelist support for restricted execution environments</li>
+ * <li>Proper argument parsing to prevent shell injection</li>
+ * <li>Execution timeout limits to prevent resource exhaustion</li>
+ * <li>Direct process execution (bypasses shell interpretation)</li>
+ * <li>Quoted string support for arguments with spaces</li>
+ * </ul>
+ * <p>
+ * The tool parses command strings safely by splitting them into individual
+ * arguments without shell interpretation, preventing common injection vectors.
+ * Commands are executed directly via ProcessBuilder rather than through a shell.
+ * </p>
+ * <p>
+ * Thread Safety: This class is thread-safe for concurrent command execution.
+ * Each execution creates its own process and doesn't share mutable state.
+ * </p>
+ *
+ * @since 1.0.0
+ * @see Tool
+ * @see ToolInput
+ * @see ToolResult
+ */
+public class CodeRunnerTool implements Tool {
+
+    private final Duration timeout;
+    private final Set<String> allowedCommands;
+
+    private static final Pattern COMMAND_PATTERN = Pattern.compile(
+            "\"([^\"]*)\"|'([^']*)'|(\\S+)"
+    );
+
+    /**
+     * Creates a new CodeRunnerTool with configuration from ApplicationConfig.
+     */
+    public CodeRunnerTool() {
+        ApplicationConfig.ToolConfig config = ApplicationConfig.getInstance().getToolConfig();
+        this.timeout = config.getCodeRunnerTimeout();
+        this.allowedCommands = config.getCodeRunnerAllowedCommands();
+    }
+
+    public CodeRunnerTool(Duration timeout) {
+        this(timeout, Set.of());
+    }
+
+    public CodeRunnerTool(Duration timeout, Set<String> allowedCommands) {
+        this.timeout = timeout;
+        this.allowedCommands = allowedCommands != null ? allowedCommands : Set.of();
+    }
+
+    @Override
+    public String name() {
+        return "code_runner";
+    }
+
+    @Override
+    public String description() {
+        return "Run a shell command safely. Input: command with arguments (supports quoted strings)";
+    }
+
+    @Override
+    public ToolResult run(ToolInput input) {
+        ValidationResult inputValidation = validateInput(input);
+        if (!inputValidation.isValid()) {
+            return new ToolResult(false, inputValidation.getErrorMessage(), null);
+        }
+        try {
+            String command = input.text().trim();
+            List<String> commandArgs = parseCommand(command);
+            if (commandArgs.isEmpty()) {
+                return new ToolResult(false, "Invalid command format", null);
+            }
+            ValidationResult commandValidation = validateCommand(commandArgs);
+            if (!commandValidation.isValid()) {
+                return new ToolResult(false, commandValidation.getErrorMessage(), null);
+            }
+            if (!allowedCommands.isEmpty() && !allowedCommands.contains(commandArgs.get(0))) {
+                return new ToolResult(false, "Command not allowed: " + commandArgs.get(0), null);
+            }
+            ProcessBuilder pb = new ProcessBuilder(commandArgs);
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            boolean finished = p.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                return new ToolResult(false, "Command timed out after " + timeout.toSeconds() + " seconds", null);
+            }
+            String output;
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                output = r.lines().collect(Collectors.joining("\n"));
+            }
+            int code = p.exitValue();
+            boolean success = code == 0;
+            String result = "ExitCode=" + code + "\n" + output;
+            return new ToolResult(success, result, Map.of("exitCode", code, "command", commandArgs.get(0)));
+        } catch (Exception e) {
+            return new ToolResult(false, "Execution error: " + e.getMessage(), null);
+        }
+    }
+
+    private List<String> parseCommand(String command) {
+        List<String> args = new ArrayList<>();
+        Matcher matcher = COMMAND_PATTERN.matcher(command);
+        while (matcher.find()) {
+            String arg = null;
+            if (matcher.group(1) != null) {
+                arg = matcher.group(1);
+            } else if (matcher.group(2) != null) {
+                arg = matcher.group(2);
+            } else if (matcher.group(3) != null) {
+                arg = matcher.group(3);
+            }
+            if (arg != null && !arg.isEmpty()) {
+                args.add(arg);
+            }
+        }
+        return args;
+    }
+
+    private ValidationResult validateInput(ToolInput input) {
+        if (input == null) {
+            return ValidationResult.invalid("Tool input cannot be null");
+        }
+        if (input.text() == null) {
+            return ValidationResult.invalid("Command cannot be null");
+        }
+        String command = input.text().trim();
+        if (command.isEmpty()) {
+            return ValidationResult.invalid("Command cannot be empty");
+        }
+        if (command.length() > 8192) {
+            return ValidationResult.invalid("Command is too long (max 8192 characters)");
+        }
+        for (char c : command.toCharArray()) {
+            if (Character.isISOControl(c) && c != '\t' && c != '\n' && c != '\r' && c != ' ') {
+                return ValidationResult.invalid("Command contains invalid control characters");
+            }
+        }
+        return ValidationResult.valid();
+    }
+
+    private ValidationResult validateCommand(List<String> commandArgs) {
+        if (commandArgs.isEmpty()) {
+            return ValidationResult.invalid("Command arguments cannot be empty");
+        }
+        String executable = commandArgs.get(0);
+        Set<String> blockedCommands = Set.of(
+                "rm", "del", "format", "fdisk", "mkfs", "dd",
+                "shutdown", "reboot", "halt", "poweroff",
+                "su", "sudo", "runas", "net", "sc", "service",
+                "kill", "killall", "taskkill", "wmic"
+        );
+        if (blockedCommands.contains(executable.toLowerCase())) {
+            return ValidationResult.invalid("Dangerous command blocked: " + executable);
+        }
+        if (executable.contains("..") || executable.contains("/") || executable.contains("\\")) {
+            return ValidationResult.invalid("Executable path contains suspicious characters: " + executable);
+        }
+        if (commandArgs.size() > 100) {
+            return ValidationResult.invalid("Too many command arguments (max 100)");
+        }
+        for (String arg : commandArgs) {
+            if (arg.length() > 2048) {
+                return ValidationResult.invalid("Command argument too long (max 2048 characters)");
+            }
+            // special characters allowed
+        }
+        return ValidationResult.valid();
+    }
+
+    private static class ValidationResult {
+        private final boolean valid;
+        private final String errorMessage;
+        private ValidationResult(boolean valid, String errorMessage) {
+            this.valid = valid;
+            this.errorMessage = errorMessage;
+        }
+        public static ValidationResult valid() {
+            return new ValidationResult(true, null);
+        }
+        public static ValidationResult invalid(String errorMessage) {
+            return new ValidationResult(false, errorMessage);
+        }
+        public boolean isValid() { return valid; }
+        public String getErrorMessage() { return errorMessage; }
+    }
+}
