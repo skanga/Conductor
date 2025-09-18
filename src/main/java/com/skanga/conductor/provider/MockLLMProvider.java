@@ -3,6 +3,8 @@ package com.skanga.conductor.provider;
 import com.skanga.conductor.exception.ConductorException;
 import com.skanga.conductor.retry.RetryPolicy;
 
+import java.util.Random;
+
 /**
  * Deterministic mock provider for demo / testing.
  * <p>
@@ -97,7 +99,7 @@ public class MockLLMProvider implements LLMProvider {
     public static class RandomFailureSimulator implements FailureSimulator {
         private final double failureProbability;
         private final String errorMessage;
-        private final java.util.Random random = new java.util.Random();
+        private final Random random = new Random();
 
         public RandomFailureSimulator(double failureProbability, String errorMessage) {
             this.failureProbability = failureProbability;

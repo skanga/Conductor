@@ -1,7 +1,12 @@
 package com.skanga.conductor.config;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.Set;
@@ -48,6 +53,7 @@ public class ApplicationConfig {
     private ApplicationConfig() {
         this.properties = new Properties();
         loadProperties();
+        loadExternalConfiguration();
         validateConfiguration();
     }
 
@@ -98,6 +104,67 @@ public class ApplicationConfig {
         loadEnvironmentVariables();
     }
 
+    /**
+     * Loads external configuration files specified via command line or system properties.
+     * <p>
+     * Supports multiple configuration sources in priority order:
+     * </p>
+     * <ol>
+     * <li>--config=path/to/file.properties command line argument</li>
+     * <li>-Dconfig=path/to/file.properties system property</li>
+     * <li>demo.properties in current working directory</li>
+     * </ol>
+     */
+    private void loadExternalConfiguration() {
+        // Priority 1: --config command line argument (stored as system property)
+        String configPath = System.getProperty("config");
+        if (configPath != null) {
+            loadExternalFile(configPath, "command line --config");
+            return;
+        }
+
+        // Priority 2: demo.properties in current directory
+        Path localDemoProperties = Paths.get("demo.properties");
+        if (Files.exists(localDemoProperties)) {
+            loadExternalFile(localDemoProperties.toString(), "local demo.properties");
+        }
+    }
+
+    /**
+     * Loads properties from an external file.
+     *
+     * @param filePath path to the properties file
+     * @param source description of the configuration source for logging
+     */
+    private void loadExternalFile(String filePath, String source) {
+        try {
+            Path path = Paths.get(filePath);
+            if (!Files.exists(path)) {
+                System.err.println("Warning: Configuration file not found: " + filePath + " (from " + source + ")");
+                return;
+            }
+
+            Properties externalProps = new Properties();
+            try (FileInputStream fis = new FileInputStream(path.toFile())) {
+                externalProps.load(fis);
+
+                // Add all properties with logging
+                int loadedCount = 0;
+                for (String key : externalProps.stringPropertyNames()) {
+                    String value = externalProps.getProperty(key);
+                    properties.setProperty(key, value);
+                    loadedCount++;
+                }
+
+                System.out.println("Loaded " + loadedCount + " properties from external configuration: " +
+                    filePath + " (from " + source + ")");
+            }
+        } catch (IOException e) {
+            System.err.println("Warning: Failed to load external configuration from " + filePath +
+                " (from " + source + "): " + e.getMessage());
+        }
+    }
+
     private void loadSystemProperties() {
         System.getProperties().forEach((key, value) -> {
             if (key.toString().startsWith("conductor.")) {
@@ -111,6 +178,16 @@ public class ApplicationConfig {
             if (key.startsWith("CONDUCTOR_")) {
                 String propertyKey = key.toLowerCase().replace("_", ".");
                 properties.setProperty(propertyKey, value);
+            } else if (key.startsWith("DEMO_")) {
+                // Convert DEMO_PROVIDER_TYPE to demo.provider.type
+                String propertyKey = key.toLowerCase().replace("_", ".").replace("demo.", "demo.");
+                properties.setProperty(propertyKey, value);
+            } else if (key.equals("OPENAI_API_KEY")) {
+                properties.setProperty("openai.api.key", value);
+            } else if (key.equals("ANTHROPIC_API_KEY")) {
+                properties.setProperty("anthropic.api.key", value);
+            } else if (key.equals("GOOGLE_API_KEY")) {
+                properties.setProperty("google.api.key", value);
             }
         });
     }
@@ -241,10 +318,10 @@ public class ApplicationConfig {
             return defaultValue;
         }
         try {
-            if (value.endsWith("s")) {
-                return Duration.ofSeconds(Long.parseLong(value.substring(0, value.length() - 1)));
-            } else if (value.endsWith("ms")) {
+            if (value.endsWith("ms")) {
                 return Duration.ofMillis(Long.parseLong(value.substring(0, value.length() - 2)));
+            } else if (value.endsWith("s")) {
+                return Duration.ofSeconds(Long.parseLong(value.substring(0, value.length() - 1)));
             } else if (value.endsWith("m")) {
                 return Duration.ofMinutes(Long.parseLong(value.substring(0, value.length() - 1)));
             } else {

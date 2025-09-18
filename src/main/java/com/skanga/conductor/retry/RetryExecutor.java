@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
@@ -184,7 +185,7 @@ public class RetryExecutor {
             metricsRegistry.record(com.skanga.conductor.metrics.Metric.gauge(
                 "retry.attempts.total",
                 context.getAttemptCount(),
-                java.util.Map.of(
+                Map.of(
                     "operation", operationName,
                     "success", String.valueOf(success),
                     "policy", policy.getClass().getSimpleName()
@@ -195,7 +196,7 @@ public class RetryExecutor {
             metricsRegistry.record(com.skanga.conductor.metrics.Metric.timer(
                 "retry.duration.total",
                 context.getElapsedTime().toMillis(),
-                java.util.Map.of(
+                Map.of(
                     "operation", operationName,
                     "success", String.valueOf(success),
                     "policy", policy.getClass().getSimpleName()
@@ -207,7 +208,7 @@ public class RetryExecutor {
                 metricsRegistry.record(com.skanga.conductor.metrics.Metric.gauge(
                     "retry.failures.total",
                     context.getFailureCount(),
-                    java.util.Map.of(
+                    Map.of(
                         "operation", operationName,
                         "final_success", String.valueOf(success),
                         "policy", policy.getClass().getSimpleName()
@@ -218,7 +219,7 @@ public class RetryExecutor {
             // Record overall retry operation outcome
             metricsRegistry.record(com.skanga.conductor.metrics.Metric.counter(
                 "retry.operations.count",
-                java.util.Map.of(
+                Map.of(
                     "operation", operationName,
                     "success", String.valueOf(success),
                     "policy", policy.getClass().getSimpleName(),

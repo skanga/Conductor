@@ -1,5 +1,7 @@
 package com.skanga.conductor.metrics;
 
+import java.util.Map;
+
 /**
  * Interface for collecting metrics from agents and tools in the Conductor framework.
  * <p>
@@ -48,7 +50,7 @@ public interface MetricsCollector {
         record(Metric.timer(
             operation + ".duration",
             durationMs,
-            java.util.Map.of(
+            Map.of(
                 "component", component,
                 "success", String.valueOf(success)
             )
@@ -56,7 +58,7 @@ public interface MetricsCollector {
 
         record(Metric.counter(
             operation + ".count",
-            java.util.Map.of(
+            Map.of(
                 "component", component,
                 "success", String.valueOf(success)
             )
@@ -79,7 +81,7 @@ public interface MetricsCollector {
         record(Metric.gauge(
             operation + ".success_rate",
             successRate,
-            java.util.Map.of("component", component)
+            Map.of("component", component)
         ));
     }
 

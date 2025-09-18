@@ -231,7 +231,7 @@ public class DemoConfig {
     public String getDemoProviderType() {
         return appConfig.getString("demo.provider.type", "mock");
     }
-
+    
     /**
      * Gets the demo planner provider type.
      *
@@ -239,6 +239,24 @@ public class DemoConfig {
      */
     public String getDemoPlannerProviderType() {
         return appConfig.getString("demo.planner.provider.type", "mock");
+    }
+
+    /**
+     * Gets the demo provider model name.
+     *
+     * @return model name for the LLM provider
+     */
+    public String getDemoProviderModel() {
+        return appConfig.getString("demo.provider.model", "gpt-3.5-turbo");
+    }
+
+    /**
+     * Gets the demo provider base URL.
+     *
+     * @return base URL for the LLM provider
+     */
+    public String getDemoProviderBaseUrl() {
+        return appConfig.getString("demo.provider.base.url", "https://api.openai.com/v1");
     }
 
     /**
@@ -352,5 +370,9 @@ public class DemoConfig {
      */
     public boolean isAutoCleanupEnabled() {
         return appConfig.getBoolean("demo.database.auto.cleanup.enabled", true);
+    }
+
+    public ApplicationConfig getAppConfig() {
+        return appConfig;
     }
 }

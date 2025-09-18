@@ -52,9 +52,9 @@ public class MetricsRegistry {
             // Register default in-memory collector
             registerDefaultCollectors();
 
-            logger.info("MetricsRegistry initialized with {} collectors", collectors.size());
+            logger.debug("MetricsRegistry initialized with {} collectors", collectors.size());
         } else {
-            logger.info("MetricsRegistry disabled by configuration");
+            logger.debug("MetricsRegistry disabled by configuration");
         }
     }
 
@@ -286,7 +286,7 @@ public class MetricsRegistry {
             }
         }
         collectors.clear();
-        logger.info("MetricsRegistry shutdown complete");
+        logger.debug("MetricsRegistry shutdown complete");
     }
 
     private void initializePatterns(ApplicationConfig.MetricsConfig config) {

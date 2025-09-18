@@ -14,6 +14,7 @@ import com.skanga.conductor.tools.ToolInput;
 import com.skanga.conductor.tools.ToolRegistry;
 import com.skanga.conductor.tools.ToolResult;
 
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -137,7 +138,7 @@ public TaskResult execute(TaskInput input) throws ConductorException.LLMProvider
         // Start timing execution
         try (TimerContext timer = metricsRegistry.startTimer(
                 "agent.execution.duration",
-                java.util.Map.of("agent", name, "type", "llm_tool"))) {
+                Map.of("agent", name, "type", "llm_tool"))) {
 
             try {
                 // Ask the LLM for a plan / response. The LLM may embed TOOL directives.

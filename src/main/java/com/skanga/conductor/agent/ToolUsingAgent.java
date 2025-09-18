@@ -13,6 +13,7 @@ import com.skanga.conductor.tools.ToolResult;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Demonstrates an agent that invokes tools directly from Java logic (no LLM involvement).
@@ -64,7 +65,7 @@ public class ToolUsingAgent implements SubAgent {
         // Start timing execution
         try (TimerContext timer = metricsRegistry.startTimer(
                 "agent.execution.duration",
-                java.util.Map.of("agent", name, "type", "tool_using"))) {
+                Map.of("agent", name, "type", "tool_using"))) {
 
             try {
                 String prompt = input.prompt();

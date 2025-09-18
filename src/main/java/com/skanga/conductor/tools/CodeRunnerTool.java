@@ -6,6 +6,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -98,7 +99,7 @@ public class CodeRunnerTool implements Tool {
             ProcessBuilder pb = new ProcessBuilder(commandArgs);
             pb.redirectErrorStream(true);
             Process p = pb.start();
-            boolean finished = p.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+            boolean finished = p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
                 p.destroyForcibly();
                 return new ToolResult(false, "Command timed out after " + timeout.toSeconds() + " seconds", null);

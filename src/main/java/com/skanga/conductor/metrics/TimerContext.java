@@ -2,6 +2,7 @@ package com.skanga.conductor.metrics;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -102,8 +103,8 @@ public class TimerContext implements AutoCloseable {
 
             // Create tags that include success information
             Map<String, String> successTags = tags != null
-                ? new java.util.HashMap<>(tags)
-                : new java.util.HashMap<>();
+                ? new HashMap<>(tags)
+                : new HashMap<>();
             successTags.put("success", String.valueOf(success));
 
             metricRecorder.accept(Metric.timer(metricName, durationMs, successTags));

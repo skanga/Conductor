@@ -189,9 +189,8 @@ class FileReadToolSecurityTest {
     @DisplayName("Test symbolic link handling")
     void testSymbolicLinkHandling() {
         // Skip on Windows as symbolic links require admin privileges
-        if (System.getProperty("os.name").toLowerCase().contains("win")) {
-            Assumptions.assumeTrue(false, "Skipping symbolic link tests on Windows");
-        }
+        Assumptions.assumeFalse(System.getProperty("os.name").toLowerCase().contains("win"),
+            "Skipping symbolic link tests on Windows");
 
         // Create a symbolic link that points outside the base directory
         Path linkTarget = Paths.get("/etc/passwd");
@@ -213,8 +212,8 @@ class FileReadToolSecurityTest {
             assertFalse(symlinkResult.success(), "Should still reject symlink that escapes base directory");
 
         } catch (UnsupportedOperationException | IOException e) {
-            // Symbolic links not supported on this system
-            Assumptions.assumeTrue(false, "Symbolic links not supported: " + e.getMessage());
+            // Symbolic links not supported on this system - skip test
+            Assumptions.assumeFalse(true, "Symbolic links not supported: " + e.getMessage());
         }
     }
 

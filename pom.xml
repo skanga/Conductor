@@ -107,14 +107,23 @@
     </dependencies>
     <build>
         <plugins>
-            <!-- exec plugin to run Main easily -->
+            <!-- exec plugin to run demos easily -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>com.skanga.conductor.demo.DemoMock</mainClass>
+                    <mainClass>com.skanga.conductor.demo.BookCreationDemo</mainClass>
                 </configuration>
+                <executions>
+                    <!-- Book creation demo: comprehensive book writing workflow -->
+                    <execution>
+                        <id>book-demo</id>
+                        <configuration>
+                            <mainClass>com.skanga.conductor.demo.BookCreationDemo</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -131,6 +140,62 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.2</version>
+            </plugin>
+            <!-- Maven Shade Plugin for creating fat JAR -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <!-- Book creation demo fat JAR -->
+                    <execution>
+                        <id>book-demo</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <finalName>conductor-book-demo</finalName>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.skanga.conductor.demo.BookCreationDemo</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                    <resource>META-INF/io.netty.versions.properties</resource>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    <addHeader>false</addHeader>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>LICENSE.txt</exclude>
+                                        <exclude>NOTICE.txt</exclude>
+                                        <exclude>THIRD_PARTY_LICENSES.txt</exclude>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/versions/*/module-info.class</exclude>
+                                        <exclude>META-INF/DEPENDENCIES</exclude>
+                                        <exclude>META-INF/license/LICENSE.*.txt</exclude>
+                                        <exclude>META-INF/maven/*/*/pom.xml</exclude>
+                                        <exclude>META-INF/maven/*/*/pom.properties</exclude>
+                                        <exclude>META-INF/services/reactor.blockhound.integration.BlockHoundIntegration</exclude>
+                                        <exclude>META-INF/FastDoubleParser-LICENSE</exclude>
+                                        <exclude>META-INF/FastDoubleParser-NOTICE</exclude>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
