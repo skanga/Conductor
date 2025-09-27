@@ -83,11 +83,30 @@
             <version>1.5.18</version>
         </dependency>
 
-        <!-- Optional: JSON (if you want structured outputs) -->
+        <!-- JSON processing now handled by Jackson (already included for YAML) -->
+
+        <!-- JSON and YAML processing using Jackson -->
         <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.13.1</version>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.18.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.18.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+            <version>2.18.2</version>
+        </dependency>
+
+        <!-- JsonPath for JSON querying and manipulation -->
+        <dependency>
+            <groupId>com.jayway.jsonpath</groupId>
+            <artifactId>json-path</artifactId>
+            <version>2.9.0</version>
         </dependency>
 
         <!-- Testing dependencies -->
@@ -101,6 +120,18 @@
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
             <version>5.13.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>5.14.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>5.14.0</version>
             <scope>test</scope>
         </dependency>
 
@@ -123,6 +154,22 @@
                             <mainClass>com.skanga.conductor.demo.BookCreationDemo</mainClass>
                         </configuration>
                     </execution>
+                    <!-- YAML-based book creation demo: declarative workflow -->
+                    <execution>
+                        <id>yaml-demo</id>
+                        <configuration>
+                            <mainClass>com.skanga.conductor.demo.BookCreationDemo</mainClass>
+                            <commandlineArgs>--yaml</commandlineArgs>
+                        </configuration>
+                    </execution>
+                    <!-- Code-based book creation demo: programmatic workflow -->
+                    <execution>
+                        <id>code-demo</id>
+                        <configuration>
+                            <mainClass>com.skanga.conductor.demo.BookCreationDemo</mainClass>
+                            <commandlineArgs>--code</commandlineArgs>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>
@@ -140,6 +187,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.2</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <runningUnderTest>true</runningUnderTest>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
             <!-- Maven Shade Plugin for creating fat JAR -->
             <plugin>

@@ -24,7 +24,7 @@ import java.util.List;
  */
 public class RetryContext {
 
-    private final RetryPolicy policy;
+    private final RetryPolicy retryPolicy;
     private final Instant startTime;
     private final List<AttemptRecord> attempts;
     private int attemptCount;
@@ -32,10 +32,10 @@ public class RetryContext {
     /**
      * Creates a new retry context for the specified policy.
      *
-     * @param policy the retry policy governing this context
+     * @param retryPolicy the retry policy governing this context
      */
-    public RetryContext(RetryPolicy policy) {
-        this.policy = policy;
+    public RetryContext(RetryPolicy retryPolicy) {
+        this.retryPolicy = retryPolicy;
         this.startTime = Instant.now();
         this.attempts = new ArrayList<>();
         this.attemptCount = 0;
@@ -64,8 +64,8 @@ public class RetryContext {
      *
      * @return the retry policy
      */
-    public RetryPolicy getPolicy() {
-        return policy;
+    public RetryPolicy getRetryPolicy() {
+        return retryPolicy;
     }
 
     /**

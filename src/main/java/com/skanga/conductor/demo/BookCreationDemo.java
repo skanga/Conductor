@@ -1,56 +1,28 @@
 package com.skanga.conductor.demo;
 
 import com.skanga.conductor.agent.SubAgentRegistry;
-import com.skanga.conductor.exception.ConductorException;
+import com.skanga.conductor.engine.DefaultWorkflowEngine.*;
 import com.skanga.conductor.memory.MemoryStore;
+import com.skanga.conductor.workflow.YamlWorkflowEngine;
 import com.skanga.conductor.orchestration.Orchestrator;
 import com.skanga.conductor.provider.LLMProvider;
-import com.skanga.conductor.provider.MockLLMProvider;
-import com.skanga.conductor.provider.OpenAiLLMProvider;
-import com.skanga.conductor.provider.AnthropicLLMProvider;
-import com.skanga.conductor.provider.GeminiLLMProvider;
-import com.skanga.conductor.provider.OllamaLLMProvider;
-import com.skanga.conductor.provider.LocalAiLLMProvider;
-import com.skanga.conductor.provider.AzureOpenAiLLMProvider;
-import com.skanga.conductor.provider.AmazonBedrockLLMProvider;
-import com.skanga.conductor.provider.OracleLLMProvider;
+import com.skanga.conductor.provider.DemoMockLLMProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 /**
- * Comprehensive book creation demo with agentic review and human-in-the-loop approval.
- * <p>
- * This demo showcases an advanced AI-powered book creation workflow that includes:
- * </p>
- * <ul>
- * <li><strong>Topic-to-Title Generation:</strong> Transform a topic prompt into compelling titles</li>
- * <li><strong>Table of Contents Creation:</strong> Generate detailed chapter outlines with descriptions</li>
- * <li><strong>Chapter-by-Chapter Writing:</strong> Create comprehensive chapter content</li>
- * <li><strong>Multi-Stage Review Process:</strong> Agentic review at each stage</li>
- * <li><strong>Human-in-the-Loop Approval:</strong> User approval required at each stage</li>
- * <li><strong>Markdown Output Generation:</strong> Professional documentation output</li>
- * </ul>
- * <p>
- * The workflow demonstrates:
- * </p>
- * <ol>
- * <li>Multi-agent orchestration with specialized agents for different tasks</li>
- * <li>Memory persistence across the workflow stages</li>
- * <li>Human oversight and approval processes</li>
- * <li>Structured output generation for review and editing</li>
- * <li>Iterative refinement based on feedback</li>
- * </ol>
+ * Book creation demo with two execution modes:
  *
- * @since 1.0.0
- * @see BookCreationWorkflow
- * @see BookManuscript
+ * --code : Programmatic workflow using WorkflowBuilder (default)
+ * --yaml : YAML-configured declarative workflow
  */
 public class BookCreationDemo {
 
@@ -58,319 +30,335 @@ public class BookCreationDemo {
     private static final Scanner scanner = new Scanner(System.in);
 
     /**
-     * Main entry point for the book creation demo.
-     *
-     * @param args command line arguments; if provided, will be used as the book topic
+     * Configuration for YAML-based workflow execution.
      */
-    public static void main(String[] args) {
-        logger.info("=== Advanced Book Creation Demo ===");
-        logger.info("This demo will guide you through creating a complete book with AI assistance.");
-        logger.info("You'll have the opportunity to review and approve content at each stage.");
+    private static class YamlConfig {
+        private String workflowPath = "yaml/workflows/book-creation.yaml";
+        private String agentsPath = "yaml/agents/book-agents.yaml";
+        private String contextPath = "yaml/context/book-context.yaml";
+        private boolean interactiveMode = false;
 
+        // Getters and setters
+        public String getWorkflowPath() { return workflowPath; }
+        public void setWorkflowPath(String workflowPath) { this.workflowPath = workflowPath; }
+
+        public String getAgentsPath() { return agentsPath; }
+        public void setAgentsPath(String agentsPath) { this.agentsPath = agentsPath; }
+
+        public String getContextPath() { return contextPath; }
+        public void setContextPath(String contextPath) { this.contextPath = contextPath; }
+
+        public boolean isInteractiveMode() { return interactiveMode; }
+        public void setInteractiveMode(boolean interactiveMode) { this.interactiveMode = interactiveMode; }
+    }
+
+    private static YamlConfig yamlConfig = new YamlConfig();
+
+    public static void main(String[] args) {
         try {
-            runBookCreationDemo(args);
+            // Process advanced configuration arguments first
+            String[] remainingArgs = processAdvancedArguments(args);
+
+            String mode = extractModeFromArgs(remainingArgs);
+            String topic = extractTopicFromArgs(remainingArgs);
+
+            // Handle help and interactive modes
+            if (mode.equals("help")) {
+                showUsage();
+                return;
+            }
+
+            if (yamlConfig.isInteractiveMode()) {
+                topic = getTopicInteractively(topic);
+            }
+
+            BookCreationUtils.displayHeader("CONDUCTOR BOOK CREATION DEMO");
+            System.out.println("Mode: " + mode.toUpperCase());
+            System.out.println("Topic: " + topic);
+            if (mode.equals("yaml")) {
+                displayYamlConfiguration();
+            }
+
+            switch (mode) {
+                case "code" -> runCodeBasedWorkflow(topic);
+                case "yaml" -> runYamlWorkflow(topic);
+                default -> showUsage();
+            }
         } catch (Exception e) {
-            logger.error("Book creation demo failed: ", e);
+            logger.error("Demo execution failed: ", e);
+            System.err.println("Demo failed: " + e.getMessage());
             System.exit(1);
         }
     }
 
     /**
-     * Runs the complete book creation demo workflow.
-     *
-     * @param args command line arguments for custom topic
+     * Runs the code-based workflow using BookCreationWorkflow.
      */
-    private static void runBookCreationDemo(String[] args) {
-        // Get book topic from user or command line
-        String bookTopic = getBookTopic(args);
+    private static void runCodeBasedWorkflow(String topic) throws Exception {
+        BookCreationUtils.displaySubHeader("Running Code-Based Workflow");
 
-        // Create output directory for this session
-        String outputDir = createSessionOutputDirectory();
+        String outputDir = createOutputDirectory("code");
 
-        // Initialize the workflow components
-        try (DemoDatabaseManager dbManager = new DemoDatabaseManager("book-creation-" + System.currentTimeMillis());
+        try (DemoDatabaseManager dbManager = new DemoDatabaseManager("code-" + System.currentTimeMillis());
              MemoryStore memoryStore = dbManager.createIsolatedMemoryStore()) {
 
-            // Set up the orchestrator and workflow
             SubAgentRegistry registry = new SubAgentRegistry();
             Orchestrator orchestrator = new Orchestrator(registry, memoryStore);
-            LLMProvider llmProvider = createLLMProvider();
+            LLMProvider llmProvider = createLLMProvider("code");
 
             BookCreationWorkflow workflow = new BookCreationWorkflow(orchestrator, llmProvider, outputDir);
 
-            // Display workflow information
-            displayWorkflowInfo(bookTopic, outputDir);
+            long startTime = System.currentTimeMillis();
+            BookManuscript manuscript = workflow.createBook(topic);
+            long duration = System.currentTimeMillis() - startTime;
 
-            // Execute the workflow
-            logger.info("Starting book creation workflow...");
-            BookManuscript manuscript = workflow.createBook(bookTopic);
-
-            // Display completion summary
-            displayCompletionSummary(manuscript, outputDir);
-
-            // Optional: Offer to create additional outputs
-            offerAdditionalOutputs(manuscript, outputDir);
-
-        } catch (ConductorException e) {
-            logger.error("Book creation workflow failed: ", e);
-            System.err.println("Book creation failed: " + e.getMessage());
-        } catch (Exception e) {
-            logger.error("Unexpected error during book creation: ", e);
-            System.err.println("Unexpected error: " + e.getMessage());
+            displayResults("Code-Based Workflow", manuscript, duration, outputDir);
         }
     }
 
     /**
-     * Processes configuration arguments and filters them out from topic arguments.
-     *
-     * @param args original command line arguments
-     * @return filtered arguments containing only topic-related content
+     * Runs the YAML-based workflow using YamlWorkflowEngine.
      */
-    private static String[] processConfigurationArguments(String[] args) {
-        List<String> topicArgs = new ArrayList<>();
+    private static void runYamlWorkflow(String topic) throws Exception {
+        BookCreationUtils.displaySubHeader("Running YAML-Based Workflow");
+
+        String outputDir = createOutputDirectory("yaml");
+
+        try (DemoDatabaseManager dbManager = new DemoDatabaseManager("yaml-" + System.currentTimeMillis());
+             MemoryStore memoryStore = dbManager.createIsolatedMemoryStore()) {
+
+            SubAgentRegistry registry = new SubAgentRegistry();
+            Orchestrator orchestrator = new Orchestrator(registry, memoryStore);
+            LLMProvider llmProvider = createLLMProvider("yaml");
+
+            YamlWorkflowEngine adapter = new YamlWorkflowEngine(orchestrator, llmProvider);
+
+            // Use configured paths
+            adapter.loadConfiguration(
+                "src/main/resources/" + yamlConfig.getWorkflowPath(),
+                "src/main/resources/" + yamlConfig.getAgentsPath(),
+                "src/main/resources/" + yamlConfig.getContextPath()
+            );
+
+            Map<String, Object> context = createExecutionContext(topic, outputDir);
+
+            long startTime = System.currentTimeMillis();
+            WorkflowResult result = adapter.executeWorkflow(context);
+            long duration = System.currentTimeMillis() - startTime;
+
+            displayYamlResults("YAML Workflow", result, duration, outputDir);
+        }
+    }
+
+
+    /**
+     * Creates execution context for YAML workflow.
+     */
+    private static Map<String, Object> createExecutionContext(String topic, String outputDir) {
+        Map<String, Object> context = new HashMap<>();
+        context.put("topic", topic);
+        context.put("output_dir", outputDir);
+        context.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
+        return context;
+    }
+
+    /**
+     * Creates LLM provider for demo (using mock provider for consistent results).
+     */
+    private static LLMProvider createLLMProvider(String prefix) {
+        return new DemoMockLLMProvider(prefix);
+    }
+
+    /**
+     * Creates output directory for workflow results.
+     */
+    private static String createOutputDirectory(String mode) throws Exception {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+        String outputDir = String.format("./data/demo-databases/book-creation-%s-%s", mode, timestamp);
+        BookCreationUtils.createDirectories(outputDir);
+        return outputDir;
+    }
+
+    /**
+     * Displays results for manuscript-based workflows.
+     */
+    private static void displayResults(String workflowName, BookManuscript manuscript, long duration, String outputDir) {
+        BookCreationUtils.displayHeader(workflowName + " - COMPLETED");
+
+        System.out.println("✅ Success: Workflow completed successfully");
+        System.out.println("📖 Title: " + manuscript.titleInfo().title());
+        System.out.println("📄 Subtitle: " + manuscript.titleInfo().subtitle());
+        System.out.println("📚 Chapters: " + manuscript.chapters().size());
+        System.out.println("⏱️  Duration: " + duration + "ms");
+        System.out.println("📁 Output: " + outputDir);
+
+        System.out.println("\nChapter Overview:");
+        for (int i = 0; i < manuscript.chapters().size(); i++) {
+            Chapter chapter = manuscript.chapters().get(i);
+            System.out.printf("%d. %s (%d words)\n",
+                i + 1,
+                chapter.title(),
+                chapter.content().split("\\s+").length
+            );
+        }
+    }
+
+    /**
+     * Displays results for WorkflowResult-based workflows.
+     */
+    private static void displayYamlResults(String workflowName, WorkflowResult result, long duration, String outputDir) {
+        BookCreationUtils.displayHeader(workflowName + " - COMPLETED");
+
+        if (result.isSuccess()) {
+            System.out.println("✅ Success: YAML workflow completed successfully");
+            System.out.println("⏱️  Total Time: " + result.getTotalExecutionTimeMs() + "ms");
+            System.out.println("🔄 Stages Executed: " + result.getStageResults().size());
+            System.out.println("📁 Output: " + outputDir);
+
+            System.out.println("\nStage Execution Details:");
+            for (StageResult stageResult : result.getStageResults()) {
+                System.out.println("├─ " + stageResult.getStageName() +
+                                 " (attempt " + stageResult.getAttempt() +
+                                 ", " + stageResult.getExecutionTimeMs() + "ms)");
+                if (stageResult.isSuccess()) {
+                    System.out.println("│  ✅ " + BookCreationUtils.truncateOutput(stageResult.getOutput(), 100));
+                } else {
+                    System.out.println("│  ❌ " + stageResult.getError());
+                }
+            }
+        } else {
+            System.err.println("❌ Workflow failed: " + result.getError());
+        }
+    }
+
+
+    /**
+     * Processes advanced configuration arguments and returns remaining topic arguments.
+     */
+    private static String[] processAdvancedArguments(String[] args) {
+        List<String> remainingArgs = new ArrayList<>();
 
         for (String arg : args) {
             if (arg.startsWith("--config=")) {
-                // Extract config file path and set as system property
                 String configPath = arg.substring("--config=".length());
                 System.setProperty("config", configPath);
                 logger.info("Configuration file specified: {}", configPath);
-            } else if (arg.equals("--config") && topicArgs.size() < args.length - 1) {
-                // Handle --config file.properties format (next argument is the file)
-                // This will be processed in the next iteration
-                continue;
-            } else if (!arg.startsWith("--")) {
-                // This is a topic argument
-                topicArgs.add(arg);
+            } else if (arg.startsWith("--workflow=")) {
+                String workflowPath = arg.substring("--workflow=".length());
+                yamlConfig.setWorkflowPath(workflowPath);
+                logger.info("Custom workflow file specified: {}", workflowPath);
+            } else if (arg.startsWith("--agents=")) {
+                String agentsPath = arg.substring("--agents=".length());
+                yamlConfig.setAgentsPath(agentsPath);
+                logger.info("Custom agents file specified: {}", agentsPath);
+            } else if (arg.startsWith("--context=")) {
+                String contextPath = arg.substring("--context=".length());
+                yamlConfig.setContextPath(contextPath);
+                logger.info("Custom context file specified: {}", contextPath);
+            } else if (arg.equals("--enable-approval") || arg.equals("--approval")) {
+                // Approval feature removed for simplified 2-option system
+                logger.info("Human approval workflow enabled");
+            } else if (arg.equals("--interactive") || arg.equals("-i")) {
+                yamlConfig.setInteractiveMode(true);
+                logger.info("Interactive mode enabled");
+            } else if (arg.equals("--help") || arg.equals("-h")) {
+                remainingArgs.add("help");
+            } else {
+                remainingArgs.add(arg);
             }
         }
 
-        return topicArgs.toArray(new String[0]);
+        return remainingArgs.toArray(new String[0]);
     }
 
     /**
-     * Gets the book topic from user input or command line arguments.
-     * Also processes configuration arguments like --config=file.properties
+     * Extracts mode from processed arguments (fallback to BookCreationUtils if simple).
      */
-    private static String getBookTopic(String[] args) {
-        // Process configuration arguments first
-        String[] topicArgs = processConfigurationArguments(args);
+    private static String extractModeFromArgs(String[] args) {
+        for (String arg : args) {
+            if (arg.equals("help")) return "help";
+        }
+        return BookCreationUtils.extractMode(args);
+    }
 
-        if (topicArgs.length > 0) {
-            String topic = String.join(" ", topicArgs);
-            logger.info("Using topic from command line: {}", topic);
-            return topic;
+    /**
+     * Extracts topic from processed arguments (fallback to BookCreationUtils if simple).
+     */
+    private static String extractTopicFromArgs(String[] args) {
+        return BookCreationUtils.extractTopic(args);
+    }
+
+    /**
+     * Gets topic interactively if in interactive mode.
+     */
+    private static String getTopicInteractively(String defaultTopic) {
+        if (defaultTopic != null && !defaultTopic.equals("Modern Software Architecture")) {
+            return defaultTopic; // Already provided via command line
         }
 
-        // Check for configured custom prompt
-        String customTopic = DemoConfig.getInstance().getCustomDemoPrompt("book.topic");
-        if (customTopic != null) {
-            logger.info("Using configured topic: {}", customTopic);
-            return customTopic;
-        }
-
-        // Interactive topic input
         System.out.println("\n" + "=".repeat(80));
-        System.out.println("BOOK CREATION ASSISTANT");
+        System.out.println("CONDUCTOR BOOK CREATION ASSISTANT");
         System.out.println("=".repeat(80));
-        System.out.println("Welcome! I'll help you create a complete book using AI assistance.");
-        System.out.println("You'll review and approve content at each stage.\n");
+        System.out.println("Welcome! This demo creates books using different workflow approaches.");
+        System.out.println("Choose between code-based or YAML-based workflow approaches.\n");
 
         System.out.print("Enter your book topic or subject: ");
-        String topic = scanner.nextLine().trim();
-
-        if (topic.isEmpty()) {
-            topic = "The fundamentals of distributed systems and microservices architecture";
-            System.out.println("Using default topic: " + topic);
-        }
-
-        return topic;
-    }
-
-    /**
-     * Creates a session-specific output directory.
-     */
-    private static String createSessionOutputDirectory() {
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-        DemoConfig config = DemoConfig.getInstance();
-        String baseDir = config.isDemoTemporary() ?
-            config.getDemoTempDatabaseDir() :
-            config.getDemoPersistentDatabaseDir();
-
-        return baseDir + "/book-creation-" + timestamp;
-    }
-
-    /**
-     * Creates an LLM provider based on configuration.
-     */
-    private static LLMProvider createLLMProvider() {
-        String providerType = DemoConfig.getInstance().getDemoProviderType();
-        String modelName = DemoConfig.getInstance().getDemoProviderModel();
-        String baseUrl = DemoConfig.getInstance().getDemoProviderBaseUrl();
-        logger.info("Using LLM provider: {}", providerType);
-
-        return switch (providerType.toLowerCase()) {
-            case "mock" -> new MockLLMProvider("book-creation");
-            case "openai" -> new OpenAiLLMProvider(DemoConfig.getInstance().getAppConfig().getString("openai.api.key"), modelName, baseUrl);
-            case "anthropic" -> new AnthropicLLMProvider(DemoConfig.getInstance().getAppConfig().getString("anthropic.api.key"), modelName);
-            case "google", "gemini" -> new GeminiLLMProvider(DemoConfig.getInstance().getAppConfig().getString("gemini.api.key"), modelName);
-            case "ollama" -> new OllamaLLMProvider(baseUrl, modelName);
-            case "localai", "local-ai" -> new LocalAiLLMProvider(baseUrl, modelName);
-            /*
-            case "azure", "azure-openai" -> new AzureOpenAiLLMProvider(apiKey, endpoint, depName);
-            case "bedrock", "amazon-bedrock" -> new AmazonBedrockLLMProvider(modelId, region);
-            case "oracle", "oci" -> new OracleLLMProvider(compartmentId, modelName);
-            */
-            default -> {
-                logger.warn("Unknown provider type '{}', using mock provider", providerType);
-                yield new MockLLMProvider("book-creation");
-            }
-        };
-    }
-
-    /**
-     * Displays workflow information to the user.
-     */
-    private static void displayWorkflowInfo(String topic, String outputDir) {
-        System.out.println("\n" + "=".repeat(80));
-        System.out.println("WORKFLOW CONFIGURATION");
-        System.out.println("=".repeat(80));
-        System.out.printf("Topic: %s%n", topic);
-        System.out.printf("Output Directory: %s%n", outputDir);
-        DemoConfig config = DemoConfig.getInstance();
-        System.out.printf("Target Words per Chapter: %d%n", config.getBookTargetWords());
-        System.out.printf("Max Words per Chapter: %d%n", config.getBookMaxWords());
-        System.out.printf("Provider: %s%n", config.getDemoProviderType());
-        System.out.printf("Model: %s%n", config.getDemoProviderModel());
-        System.out.printf("Base URL: %s%n", config.getDemoProviderBaseUrl());
-        System.out.printf("Verbose Logging: %s%n", config.isVerboseLoggingEnabled());
-
-        System.out.println("=".repeat(80));
-
-        System.out.println("\nThe workflow includes these stages:");
-        System.out.println("1. Title and Subtitle Generation (with review & approval)");
-        System.out.println("2. Table of Contents Creation (with review & approval)");
-        System.out.println("3. Chapter-by-Chapter Writing (with review & approval)");
-        System.out.println("4. Final Book Review (with approval)");
-        System.out.println("\nAll outputs will be saved as markdown files for easy review.");
-
-        System.out.print("\nPress Enter to continue...");
         try {
-            if (System.in.available() > 0 || System.console() != null) {
-                scanner.nextLine();
-            } else {
-                System.out.println(" [Auto-continuing in non-interactive mode]");
-            }
-        } catch (IOException e) {
-            System.out.println(" [Auto-continuing - unable to check input availability]");
-        }
-    }
-
-    /**
-     * Displays completion summary to the user.
-     */
-    private static void displayCompletionSummary(BookManuscript manuscript, String outputDir) {
-        System.out.println("\n" + "=".repeat(80));
-        System.out.println("BOOK CREATION COMPLETED!");
-        System.out.println("=".repeat(80));
-        System.out.println(manuscript.getSummary());
-        System.out.println("=".repeat(80));
-        System.out.printf("All files saved to: %s%n", outputDir);
-
-        if (DemoConfig.getInstance().isVerboseLoggingEnabled()) {
-            System.out.println("\nChapter Overview:");
-            for (int i = 0; i < manuscript.chapters().size(); i++) {
-                Chapter chapter = manuscript.chapters().get(i);
-                int wordCount = chapter.content().split("\\s+").length;
-                System.out.printf("%d. %s (%,d words)%n", i + 1, chapter.title(), wordCount);
-            }
-        }
-
-        logger.info("Book creation completed successfully!");
-        logger.info("Generated book: {}", manuscript.titleInfo().title());
-        logger.info("Chapters: {}", manuscript.getChapterCount());
-        logger.info("Estimated words: {}", manuscript.getEstimatedWordCount());
-        logger.info("Estimated pages: {}", manuscript.getEstimatedPageCount());
-    }
-
-    /**
-     * Offers additional output options to the user.
-     */
-    private static void offerAdditionalOutputs(BookManuscript manuscript, String outputDir) {
-        System.out.println("\n" + "=".repeat(80));
-        System.out.println("ADDITIONAL OPTIONS");
-        System.out.println("=".repeat(80));
-        System.out.println("Your book has been created and saved to markdown files.");
-        System.out.println("You can find the following files in the output directory:");
-        System.out.println("- 01-title-*.md (Title and subtitle with reviews)");
-        System.out.println("- 02-toc-*.md (Table of contents with reviews)");
-        System.out.println("- 03-chapter-*.md (Individual chapters with reviews)");
-        System.out.println("- 04-complete-book-*.md (Complete book in one file)");
-
-        System.out.print("\nWould you like to see a summary of the generated content? (y/n): ");
-        try {
-            if (System.console() != null) {
-                String response = scanner.nextLine().trim().toLowerCase();
-                if (response.equals("y") || response.equals("yes")) {
-                    displayContentSummary(manuscript);
+            if (System.in.available() > 0) {
+                String topic = scanner.nextLine().trim();
+                if (!topic.isEmpty()) {
+                    return topic;
                 }
-            } else {
-                System.out.println("y [Auto-approved in non-interactive mode]");
-                displayContentSummary(manuscript);
             }
         } catch (Exception e) {
-            System.out.println("y [Auto-approved due to input unavailability]");
-            displayContentSummary(manuscript);
+            logger.debug("Input not available");
         }
 
-        if (DemoConfig.getInstance().isCleanupEnabled()) {
-            System.out.print("\nWould you like to clean up temporary files? (y/n): ");
-            try {
-                if (System.console() != null) {
-                    String response = scanner.nextLine().trim().toLowerCase();
-                    if (response.equals("y") || response.equals("yes")) {
-                        logger.info("Cleanup would be performed here (implementation depends on requirements)");
-                        System.out.println("Cleanup completed.");
-                    }
-                } else {
-                    System.out.println("n [Auto-declined in non-interactive mode]");
-                }
-            } catch (Exception e) {
-                System.out.println("n [Auto-declined due to input unavailability]");
-            }
-        }
-
-        System.out.println("\nThank you for using the Book Creation Demo!");
-        System.out.println("Your complete book is ready for further editing and publication.");
+        return defaultTopic != null ? defaultTopic : "Modern Software Architecture";
     }
 
     /**
-     * Displays a detailed content summary.
+     * Displays YAML configuration information.
      */
-    private static void displayContentSummary(BookManuscript manuscript) {
-        System.out.println("\n" + "=".repeat(80));
-        System.out.println("CONTENT SUMMARY");
-        System.out.println("=".repeat(80));
+    private static void displayYamlConfiguration() {
+        System.out.println("Workflow: " + yamlConfig.getWorkflowPath());
+        System.out.println("Agents: " + yamlConfig.getAgentsPath());
+        System.out.println("Context: " + yamlConfig.getContextPath());
+        System.out.println("Interactive Mode: " + (yamlConfig.isInteractiveMode() ? "ENABLED" : "DISABLED"));
+    }
 
-        System.out.printf("Title: %s%n", manuscript.titleInfo().title());
-        System.out.printf("Subtitle: %s%n", manuscript.titleInfo().subtitle());
+    /**
+     * Shows usage information for the demo.
+     */
+    private static void showUsage() {
+        BookCreationUtils.displayHeader("BOOK CREATION DEMO - USAGE");
+
+        System.out.println("Usage: java BookCreationDemo [OPTIONS] [TOPIC]");
         System.out.println();
-
-        System.out.println("Table of Contents Summary:");
-        System.out.println(manuscript.tableOfContents().getSummary());
+        System.out.println("Build Options:");
+        System.out.println("  --code       Code-based workflow using WorkflowBuilder (default)");
+        System.out.println("  --yaml       YAML-based declarative workflow");
         System.out.println();
-
-        System.out.println("Chapter Details:");
-        for (int i = 0; i < manuscript.chapters().size(); i++) {
-            Chapter chapter = manuscript.chapters().get(i);
-            int wordCount = chapter.content().split("\\s+").length;
-            String preview = chapter.content().length() > 100 ?
-                chapter.content().substring(0, 100) + "..." :
-                chapter.content();
-
-            System.out.printf("%d. %s (%,d words)%n", i + 1, chapter.title(), wordCount);
-            System.out.printf("   Preview: %s%n", preview.replace("\n", " "));
-            System.out.println();
-        }
+        System.out.println("YAML Configuration Options:");
+        System.out.println("  --workflow=FILE   Path to workflow YAML definition");
+        System.out.println("                    (default: yaml/workflows/book-creation.yaml)");
+        System.out.println("  --agents=FILE     Path to agents YAML configuration");
+        System.out.println("                    (default: yaml/agents/book-agents.yaml)");
+        System.out.println("  --context=FILE    Path to context YAML file");
+        System.out.println("                    (default: yaml/context/book-context.yaml)");
+        System.out.println("  --interactive, -i Enable interactive topic input");
+        System.out.println("  --help, -h        Show this help message");
+        System.out.println();
+        System.out.println("Examples:");
+        System.out.println("  java BookCreationDemo \"AI and Machine Learning\"");
+        System.out.println("  java BookCreationDemo --code \"Software Architecture\"");
+        System.out.println("  java BookCreationDemo --yaml \"Cloud Computing\"");
+        System.out.println("  java BookCreationDemo --yaml --interactive");
+        System.out.println();
+        System.out.println("Features:");
+        System.out.println("• Code-based: Full programmatic control using WorkflowBuilder");
+        System.out.println("• YAML-based: Declarative configuration-driven workflows");
+        System.out.println("• Both approaches use the same underlying execution engine");
+        System.out.println("• Choose the approach that best fits your team's needs");
     }
 }

@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <!-- Console appender for development -->
+    <!-- Console Appender for Development - Only WARN and above to avoid cluttering user output -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
+        <!-- Only show WARN and above on console to keep user output clean -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
     </appender>
 
     <!-- File appender for persistent logging -->
@@ -30,42 +34,112 @@
         <includeCallerData>false</includeCallerData>
     </appender>
 
-    <!-- Logger configurations for different packages -->
+    <!-- Debug File Appender (DEBUG and above) -->
+    <appender name="DEBUG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/conductor-debug.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/conductor-debug.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>DEBUG</level>
+        </filter>
+    </appender>
 
-    <!-- Core framework logging -->
-    <logger name="com.skanga" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE"/>
+    <!-- Metrics-specific appender -->
+    <appender name="METRICS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/metrics.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/metrics.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>5MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>150MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Package-specific loggers -->
+
+    <!-- Metrics logging -->
+    <logger name="com.skanga.conductor.metrics" level="INFO" additivity="false">
+        <appender-ref ref="METRICS_FILE"/>
         <appender-ref ref="ASYNC_FILE"/>
     </logger>
 
-    <!-- Demo applications - more verbose for demonstration -->
-    <logger name="com.skanga.demo" level="INFO" additivity="false">
-        <appender-ref ref="CONSOLE"/>
+    <!-- Demo package - more verbose for development -->
+    <logger name="com.skanga.conductor.demo" level="DEBUG" additivity="false">
         <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="DEBUG_FILE"/>
+        <appender-ref ref="CONSOLE"/>
     </logger>
 
-    <!-- LLM operations logging -->
-    <logger name="com.skanga.conductor.agent.LLMSubAgent" level="DEBUG" additivity="false">
-        <appender-ref ref="CONSOLE"/>
+    <!-- Provider package - important for debugging LLM issues -->
+    <logger name="com.skanga.conductor.provider" level="DEBUG" additivity="false">
         <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="DEBUG_FILE"/>
+        <appender-ref ref="CONSOLE"/>
     </logger>
 
-    <!-- Planner operations logging -->
-    <logger name="com.skanga.conductor.orchestration.PlannerOrchestrator" level="DEBUG" additivity="false">
-        <appender-ref ref="CONSOLE"/>
+    <!-- Orchestration and agents - key business logic -->
+    <logger name="com.skanga.conductor.orchestration" level="INFO" additivity="false">
         <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
     </logger>
 
-    <!-- Tool execution logging -->
-    <logger name="com.skanga.tools" level="WARN" additivity="false">
-        <appender-ref ref="CONSOLE"/>
+    <logger name="com.skanga.conductor.agent" level="INFO" additivity="false">
         <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
     </logger>
 
-    <!-- Third-party libraries - keep quiet -->
+    <!-- No-code system -->
+    <logger name="com.skanga.conductor.workflow" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Retry system - usually only need warnings -->
+    <logger name="com.skanga.conductor.retry" level="WARN" additivity="false">
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Tools - can be chatty, keep at INFO -->
+    <logger name="com.skanga.conductor.tools" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Configuration and utilities -->
+    <logger name="com.skanga.conductor.config" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Exception handling -->
+    <logger name="com.skanga.conductor.exception" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Memory operations -->
+    <logger name="com.skanga.conductor.memory" level="INFO" additivity="false">
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- External libraries - keep quiet unless there are problems -->
+    <logger name="dev.langchain4j" level="WARN"/>
+    <logger name="org.apache.http" level="WARN"/>
+    <logger name="com.fasterxml.jackson" level="WARN"/>
     <logger name="org.h2" level="WARN"/>
     <logger name="com.h2database" level="WARN"/>
-    <logger name="dev.langchain4j" level="INFO"/>
 
     <!-- Root logger configuration -->
     <root level="INFO">

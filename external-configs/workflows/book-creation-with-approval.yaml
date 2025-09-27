@@ -1,0 +1,62 @@
+workflow:
+  name: "book-creation"
+  description: "AI-powered book creation with human approval"
+  version: "1.0"
+
+settings:
+  output_dir: "data/workflow-books/${timestamp}"
+  max_retries: 3
+  timeout: "10m"
+  target_words_per_chapter: 800
+  max_words_per_chapter: 1200
+
+stages:
+  - name: "title-generation"
+    description: "Generate compelling book title and subtitle"
+    agents:
+      generator: "title-generator"
+      reviewer: "title-reviewer"
+    approval:
+      required: true
+      timeout: "5m"
+    outputs:
+      - "01-title-${timestamp}.md"
+
+  - name: "toc-generation"
+    description: "Create detailed table of contents"
+    depends_on: ["title-generation"]
+    agents:
+      generator: "toc-generator"
+      reviewer: "toc-reviewer"
+    approval:
+      required: true
+    outputs:
+      - "02-toc-${timestamp}.md"
+
+  - name: "chapter-generation"
+    description: "Generate individual chapters"
+    depends_on: ["toc-generation"]
+    parallel: false
+    agents:
+      writer: "chapter-writer"
+      reviewer: "chapter-reviewer"
+    approval:
+      required: true
+      per_item: true
+    outputs:
+      - "03-chapter-${chapter_number}-${timestamp}.md"
+
+  - name: "final-review"
+    description: "Complete book review and assembly"
+    depends_on: ["chapter-generation"]
+    agents:
+      reviewer: "book-reviewer"
+    approval:
+      required: true
+    outputs:
+      - "04-complete-book-${timestamp}.md"
+
+variables:
+  topic: "${BOOK_TOPIC:-Introduction to AI}"
+  author: "${AUTHOR_NAME:-AI Assistant}"
+  target_audience: "professionals"

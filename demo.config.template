@@ -1,0 +1,16 @@
+# Demo Configuration Template
+# Copy this file to demo.config and set your API key via environment variable
+
+demo.provider.type=openai
+demo.provider.model=openai/gpt-oss-120b
+demo.provider.base.url=https://api.groq.com/openai/v1
+
+# SECURITY: Set API key via environment variable instead of hardcoding
+# Environment variable: OPENAI_API_KEY=your-actual-api-key-here
+# openai.api.key=your-api-key-here
+
+demo.book.target.words=500
+demo.book.max.words=800
+demo.logging.verbose=false
+demo.database.temporary=false
+demo.output.directory=./books/

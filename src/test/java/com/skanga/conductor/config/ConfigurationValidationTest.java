@@ -1,5 +1,6 @@
 package com.skanga.conductor.config;
 
+import com.skanga.conductor.utils.SingletonHolder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,9 +36,14 @@ class ConfigurationValidationTest {
     void testInvalidJdbcUrl() {
         System.setProperty("conductor.database.url", "invalid-url");
 
-        assertThrows(ConfigurationException.class, () -> {
-            ApplicationConfig.getInstance();
-        });
+        com.skanga.conductor.exception.SingletonException.InitializationException exception =
+            assertThrows(com.skanga.conductor.exception.SingletonException.InitializationException.class, () -> {
+                ApplicationConfig.getInstance();
+            });
+
+        // Verify the root cause is ConfigurationException
+        Throwable cause = exception.getCause();
+        assertInstanceOf(com.skanga.conductor.exception.ConfigurationException.class, cause);
     }
 
     @Test
@@ -45,9 +51,14 @@ class ConfigurationValidationTest {
     void testInvalidMaxConnections() {
         System.setProperty("conductor.database.max.connections", "-1");
 
-        assertThrows(ConfigurationException.class, () -> {
-            ApplicationConfig.getInstance();
-        });
+        com.skanga.conductor.exception.SingletonException.InitializationException exception =
+            assertThrows(com.skanga.conductor.exception.SingletonException.InitializationException.class, () -> {
+                ApplicationConfig.getInstance();
+            });
+
+        // Verify the root cause is ConfigurationException
+        Throwable cause = exception.getCause();
+        assertInstanceOf(com.skanga.conductor.exception.ConfigurationException.class, cause);
     }
 
     @Test
@@ -59,7 +70,7 @@ class ConfigurationValidationTest {
         });
 
         // Invalid range should throw
-        assertThrows(ConfigurationException.class, () -> {
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
             ConfigurationValidator.validateIntRange(15, 1, 10, "test.property");
         });
     }
@@ -73,12 +84,12 @@ class ConfigurationValidationTest {
         });
 
         // Negative duration should throw
-        assertThrows(ConfigurationException.class, () -> {
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
             ConfigurationValidator.validateDuration(Duration.ofSeconds(-1), 5, "test.timeout");
         });
 
         // Too long duration should throw
-        assertThrows(ConfigurationException.class, () -> {
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
             ConfigurationValidator.validateDuration(Duration.ofMinutes(10), 5, "test.timeout");
         });
     }
@@ -102,7 +113,7 @@ class ConfigurationValidationTest {
         });
 
         // Invalid URL should throw
-        assertThrows(ConfigurationException.class, () -> {
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
             ConfigurationValidator.validateHttpUrl("not-a-url", "test.url");
         });
 
@@ -112,7 +123,7 @@ class ConfigurationValidationTest {
         });
 
         // Invalid JDBC URL should throw
-        assertThrows(ConfigurationException.class, () -> {
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
             ConfigurationValidator.validateJdbcUrl("not-jdbc-url", "test.jdbc");
         });
     }
@@ -126,12 +137,12 @@ class ConfigurationValidationTest {
         });
 
         // Path with .. should throw
-        assertThrows(ConfigurationException.class, () -> {
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
             ConfigurationValidator.validateSecurePath("../dangerous/path", "test.path");
         });
 
         // Path with expressions should throw
-        assertThrows(ConfigurationException.class, () -> {
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
             ConfigurationValidator.validateSecurePath("./path/${evil.expression}", "test.path");
         });
     }

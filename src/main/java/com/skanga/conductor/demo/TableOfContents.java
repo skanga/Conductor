@@ -2,13 +2,13 @@ package com.skanga.conductor.demo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.annotations.SerializedName;
+import com.skanga.conductor.utils.JsonUtils;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Represents a book's table of contents with chapter extraction capabilities.
@@ -50,17 +50,15 @@ public record TableOfContents(String content) {
     }
 
     private static final Logger logger = LoggerFactory.getLogger(TableOfContents.class);
-    private static final Gson gson = new Gson();
 
     // Thread-safe cache for chapter specifications
-    private static final java.util.concurrent.ConcurrentHashMap<String, List<ChapterSpec>> chapterSpecCache =
-        new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, List<ChapterSpec>> chapterSpecCache = new ConcurrentHashMap<>();
 
     /**
      * JSON structure for table of contents.
      */
     public static class TocJson {
-        @SerializedName("chapters")
+        @JsonProperty("chapters")
         public List<ChapterJson> chapters = new ArrayList<>();
     }
 
@@ -68,16 +66,16 @@ public record TableOfContents(String content) {
      * JSON structure for individual chapters.
      */
     public static class ChapterJson {
-        @SerializedName("number")
+        @JsonProperty("number")
         public int number;
 
-        @SerializedName("title")
+        @JsonProperty("title")
         public String title;
 
-        @SerializedName("description")
+        @JsonProperty("description")
         public String description;
 
-        @SerializedName("keyPoints")
+        @JsonProperty("keyPoints")
         public List<String> keyPoints = new ArrayList<>();
     }
 
@@ -115,50 +113,50 @@ public record TableOfContents(String content) {
         logger.info("STEP 1: Attempting JSON parsing...");
         specs = extractChaptersFromJson();
         if (!specs.isEmpty()) {
-            logger.info("✅ SUCCESS: Extracted {} chapters from JSON", specs.size());
+            logger.info("SUCCESS: Extracted {} chapters from JSON", specs.size());
             logExtractedChapters(specs, "JSON");
             return specs;
         }
-        logger.info("❌ JSON parsing failed");
+        logger.info("ERROR: JSON parsing failed");
 
         // Priority 2: Look for JSON within the content (in case there's extra text)
         logger.info("STEP 2: Attempting embedded JSON extraction...");
         specs = extractJsonFromMixedContent();
         if (!specs.isEmpty()) {
-            logger.info("✅ SUCCESS: Extracted {} chapters from embedded JSON", specs.size());
+            logger.info("SUCCESS: Extracted {} chapters from embedded JSON", specs.size());
             logExtractedChapters(specs, "Embedded JSON");
             return specs;
         }
-        logger.info("❌ Embedded JSON parsing failed");
+        logger.info("ERROR: Embedded JSON parsing failed");
 
         // Priority 3: Fallback to markdown parsing
         logger.info("STEP 3: Attempting markdown parsing...");
         specs = extractChaptersFromMarkdown();
         if (!specs.isEmpty()) {
-            logger.info("✅ SUCCESS: Extracted {} chapters from markdown", specs.size());
+            logger.info("SUCCESS: Extracted {} chapters from markdown", specs.size());
             logExtractedChapters(specs, "Markdown");
             return specs;
         }
-        logger.info("❌ Markdown parsing failed");
+        logger.info("ERROR: Markdown parsing failed");
 
         // Priority 4: Try numbered list patterns
         logger.info("STEP 4: Attempting numbered list parsing...");
         specs = extractChaptersFromNumberedList();
         if (!specs.isEmpty()) {
-            logger.info("✅ SUCCESS: Extracted {} chapters from numbered lists", specs.size());
+            logger.info("SUCCESS: Extracted {} chapters from numbered lists", specs.size());
             logExtractedChapters(specs, "Numbered Lists");
             return specs;
         }
-        logger.info("❌ Numbered list parsing failed");
+        logger.info("ERROR: Numbered list parsing failed");
 
         // Priority 5: Aggressive line-by-line extraction
         logger.info("STEP 5: Attempting aggressive line-by-line extraction...");
         specs = extractChaptersAggressive();
         if (!specs.isEmpty()) {
-            logger.info("✅ FALLBACK SUCCESS: Extracted {} chapters using aggressive extraction", specs.size());
+            logger.info("FALLBACK SUCCESS: Extracted {} chapters using aggressive extraction", specs.size());
             logExtractedChapters(specs, "Aggressive Extraction");
         } else {
-            logger.error("❌ ALL PARSING METHODS FAILED - No chapters extracted!");
+            logger.error("ERROR: ALL PARSING METHODS FAILED - No chapters extracted!");
         }
 
         logger.info("=== END CHAPTER EXTRACTION DIAGNOSTICS ===");
@@ -331,9 +329,9 @@ public record TableOfContents(String content) {
         }
 
         try {
-            TocJson tocJson = gson.fromJson(trimmedContent, TocJson.class);
+            TocJson tocJson = JsonUtils.fromJson(trimmedContent, TocJson.class);
             return validateAndExtractChapters(tocJson, "direct JSON parsing");
-        } catch (JsonSyntaxException e) {
+        } catch (com.skanga.conductor.exception.JsonProcessingException e) {
             logger.warn("JSON syntax error during direct parsing: {} | Content preview: {}",
                 e.getMessage(),
                 getContentPreview(trimmedContent));
@@ -404,7 +402,7 @@ public record TableOfContents(String content) {
     /**
      * Attempts to recover from JSON syntax errors using common fixes.
      */
-    private List<ChapterSpec> tryJsonRecovery(String content, JsonSyntaxException originalError) {
+    private List<ChapterSpec> tryJsonRecovery(String content, com.skanga.conductor.exception.JsonProcessingException originalError) {
         logger.info("Attempting JSON recovery from syntax error...");
 
         // Recovery attempt 1: Fix common trailing comma issues
@@ -412,7 +410,7 @@ public record TableOfContents(String content) {
         if (!fixedContent.equals(content)) {
             logger.debug("Recovery attempt 1: Removing trailing commas");
             try {
-                TocJson tocJson = gson.fromJson(fixedContent, TocJson.class);
+                TocJson tocJson = JsonUtils.fromJson(fixedContent, TocJson.class);
                 List<ChapterSpec> result = validateAndExtractChapters(tocJson, "JSON recovery (trailing commas)");
                 if (!result.isEmpty()) {
                     logger.info("Successfully recovered from JSON error by fixing trailing commas");
@@ -428,7 +426,7 @@ public record TableOfContents(String content) {
         if (!quoteFixes.equals(content)) {
             logger.debug("Recovery attempt 2: Escaping internal quotes");
             try {
-                TocJson tocJson = gson.fromJson(quoteFixes, TocJson.class);
+                TocJson tocJson = JsonUtils.fromJson(quoteFixes, TocJson.class);
                 List<ChapterSpec> result = validateAndExtractChapters(tocJson, "JSON recovery (quote escaping)");
                 if (!result.isEmpty()) {
                     logger.info("Successfully recovered from JSON error by escaping quotes");
@@ -477,9 +475,9 @@ public record TableOfContents(String content) {
         }
 
         try {
-            TocJson tocJson = gson.fromJson(jsonPart, TocJson.class);
+            TocJson tocJson = JsonUtils.fromJson(jsonPart, TocJson.class);
             return validateAndExtractChapters(tocJson, "mixed content JSON extraction");
-        } catch (JsonSyntaxException e) {
+        } catch (com.skanga.conductor.exception.JsonProcessingException e) {
             logger.warn("JSON syntax error in mixed content: {} | Extracted JSON preview: {}",
                 e.getMessage(),
                 getContentPreview(jsonPart));

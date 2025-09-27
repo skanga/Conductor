@@ -336,13 +336,13 @@ class RetrySystemTest {
         OpenAiLLMProvider provider = new OpenAiLLMProvider("test-key", "gpt-3.5-turbo", "https://api.openai.com/v1");
 
         assertNotNull(provider.getRetryExecutor());
-        assertNotNull(provider.getRetryExecutor().getPolicy());
+        assertNotNull(provider.getRetryExecutor().getRetryPolicy());
 
         // Test with custom retry policy
         RetryPolicy customPolicy = RetryPolicy.fixedDelay(2, Duration.ofSeconds(1));
         OpenAiLLMProvider customProvider = new OpenAiLLMProvider("test-key", "gpt-3.5-turbo", "https://api.openai.com/v1", customPolicy);
 
-        assertEquals(customPolicy, customProvider.getRetryExecutor().getPolicy());
+        assertEquals(customPolicy, customProvider.getRetryExecutor().getRetryPolicy());
     }
 
     @Test

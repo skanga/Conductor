@@ -23,7 +23,7 @@ import java.util.List;
  * @param revisions the list of revision steps (draft, edited versions, etc.)
  * @param critique the critical feedback and suggestions for improvement
  * @since 1.0.0
- * @see BookWorkflow
+ * @see BookCreationWorkflow
  * @see ChapterSpec
  */
 public record Chapter(String title, String content, List<String> revisions, String critique) {

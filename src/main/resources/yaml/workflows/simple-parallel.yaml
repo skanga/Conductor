@@ -1,0 +1,48 @@
+workflow:
+  name: "simple-parallel"
+  description: "Simple parallel execution test with LLM agents"
+  version: "1.0"
+
+settings:
+  output_dir: "data/simple-parallel-${timestamp}"
+  max_retries: 2
+
+stages:
+  # Single initialization stage
+  - name: "setup"
+    description: "Initialize workflow"
+    agents:
+      initializer: "title-generator"
+    outputs:
+      - "00-setup-${timestamp}.md"
+
+  # Two parallel stages after setup
+  - name: "content-creation"
+    description: "Create content in parallel"
+    depends_on: ["setup"]
+    parallel: true
+    agents:
+      creator: "toc-generator"
+    outputs:
+      - "01-content-${timestamp}.md"
+
+  - name: "quality-review"
+    description: "Review quality in parallel"
+    depends_on: ["setup"]
+    parallel: true
+    agents:
+      reviewer: "toc-reviewer"
+    outputs:
+      - "01-quality-${timestamp}.md"
+
+  # Final assembly stage
+  - name: "final-output"
+    description: "Assemble final output"
+    depends_on: ["content-creation", "quality-review"]
+    agents:
+      assembler: "book-reviewer"
+    outputs:
+      - "02-final-${timestamp}.md"
+
+variables:
+  topic: "${DEMO_TOPIC:-Simple Parallel Workflow}"

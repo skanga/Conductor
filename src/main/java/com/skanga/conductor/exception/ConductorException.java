@@ -1,7 +1,7 @@
 package com.skanga.conductor.exception;
 
 import com.skanga.conductor.memory.MemoryStore;
-import com.skanga.conductor.orchestration.LLMPlanner;
+import com.skanga.conductor.orchestration.LLMPlanMaker;
 import com.skanga.conductor.orchestration.PlannerOrchestrator;
 import com.skanga.conductor.tools.Tool;
 
@@ -14,22 +14,44 @@ import com.skanga.conductor.tools.Tool;
  * different types of failures.
  * </p>
  * <p>
+ * Following the framework's exception strategy, ConductorException is a checked
+ * exception used for recoverable business logic failures that calling code should
+ * handle with recovery strategies such as retries, fallbacks, or alternative approaches.
+ * </p>
+ * <p>
+ * Enhanced Context Support:
+ * </p>
+ * <ul>
+ * <li>Structured error codes and categories via {@link ExceptionContext}</li>
+ * <li>Recovery hints and operational metadata</li>
+ * <li>Timing information and attempt tracking</li>
+ * <li>Correlation IDs for distributed tracing</li>
+ * </ul>
+ * <p>
  * Subclasses include:
  * </p>
  * <ul>
- * <li>{@link LLMProviderException} - LLM service related errors</li>
- * <li>{@link ToolExecutionException} - Tool execution failures</li>
- * <li>{@link PlannerException} - Planning and orchestration errors</li>
- * <li>{@link MemoryStoreException} - Memory persistence errors (unchecked)</li>
+ * <li>{@link LLMProviderException} - LLM service related errors (retryable)</li>
+ * <li>{@link ToolExecutionException} - Tool execution failures (can fallback)</li>
+ * <li>{@link PlannerException} - Planning and orchestration errors (can retry)</li>
+ * <li>{@link com.skanga.conductor.workflow.approval.ApprovalException} - Human approval failures (can re-prompt)</li>
  * </ul>
+ * <p>
+ * For programming errors and system failures, use {@link ConductorRuntimeException} subclasses instead.
+ * </p>
  *
  * @since 1.0.0
  * @see LLMProviderException
  * @see ToolExecutionException
  * @see PlannerException
- * @see MemoryStoreException
+ * @see com.skanga.conductor.workflow.approval.ApprovalException
+ * @see ConductorRuntimeException
+ * @see ExceptionStrategy
+ * @see ExceptionContext
  */
 public class ConductorException extends Exception {
+
+    private final ExceptionContext context;
     /**
      * Constructs a new ConductorException with the specified detail message.
      *
@@ -37,6 +59,7 @@ public class ConductorException extends Exception {
      */
     public ConductorException(String message) {
         super(message);
+        this.context = null;
     }
 
     /**
@@ -47,21 +70,139 @@ public class ConductorException extends Exception {
      */
     public ConductorException(String message, Throwable cause) {
         super(message, cause);
+        this.context = null;
+    }
+
+    /**
+     * Constructs a new ConductorException with enhanced context information.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param context the enhanced context information
+     */
+    public ConductorException(String message, ExceptionContext context) {
+        super(enhanceMessage(message, context));
+        this.context = context;
+    }
+
+    /**
+     * Constructs a new ConductorException with enhanced context information and cause.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param cause the underlying cause of this exception
+     * @param context the enhanced context information
+     */
+    public ConductorException(String message, Throwable cause, ExceptionContext context) {
+        super(enhanceMessage(message, context), cause);
+        this.context = context;
+    }
+
+    /**
+     * Gets the enhanced context information associated with this exception.
+     *
+     * @return the exception context, or null if not available
+     */
+    public ExceptionContext getContext() {
+        return context;
+    }
+
+    /**
+     * Checks if this exception has enhanced context information.
+     *
+     * @return true if context is available
+     */
+    public boolean hasContext() {
+        return context != null;
+    }
+
+    /**
+     * Gets the error code from the context, if available.
+     *
+     * @return the error code, or null if not available
+     */
+    public String getErrorCode() {
+        return context != null ? context.getErrorCode() : null;
+    }
+
+    /**
+     * Gets the error category from the context, if available.
+     *
+     * @return the error category, or null if not available
+     */
+    public ExceptionContext.ErrorCategory getErrorCategory() {
+        return context != null ? context.getCategory() : null;
+    }
+
+    /**
+     * Checks if this exception is retryable based on context information.
+     *
+     * @return true if the exception suggests retry is appropriate
+     */
+    public boolean isRetryable() {
+        return context != null && context.isRetryable();
+    }
+
+    /**
+     * Checks if this exception suggests using a fallback mechanism.
+     *
+     * @return true if fallback is suggested
+     */
+    public boolean suggestsFallback() {
+        return context != null && context.suggestsFallback();
+    }
+
+    /**
+     * Gets a detailed error summary including context information.
+     *
+     * @return formatted error summary
+     */
+    public String getDetailedSummary() {
+        if (context != null) {
+            return context.getSummary() + ": " + getMessage();
+        }
+        return getMessage();
+    }
+
+    /**
+     * Enhances the exception message with context information.
+     *
+     * @param message the base message
+     * @param context the exception context
+     * @return enhanced message
+     */
+    private static String enhanceMessage(String message, ExceptionContext context) {
+        if (context == null) {
+            return message;
+        }
+        StringBuilder enhanced = new StringBuilder();
+        if (context.getErrorCode() != null) {
+            enhanced.append("[").append(context.getErrorCode()).append("] ");
+        }
+        enhanced.append(message);
+        if (context.getOperation() != null) {
+            enhanced.append(" (operation: ").append(context.getOperation()).append(")");
+        }
+        if (context.getAttemptNumber() != null && context.getMaxAttempts() != null) {
+            enhanced.append(" [attempt ").append(context.getAttemptNumber())
+                    .append("/").append(context.getMaxAttempts()).append("]");
+        }
+        return enhanced.toString();
     }
 
     /**
      * Unchecked exception used by {@link MemoryStore} to wrap SQL related errors.
      * <p>
-     * It extends {@link RuntimeException} so callers are not forced to catch it,
-     * but the original {@link java.sql.SQLException} is retained as the cause.
-     * This allows for cleaner client code while still preserving error details
-     * for debugging and logging purposes.
+     * It extends {@link ConductorRuntimeException} following the framework's exception
+     * strategy. Infrastructure failures like database connection issues represent
+     * system errors that calling code typically cannot recover from meaningfully.
+     * The original {@link java.sql.SQLException} is retained as the cause for
+     * debugging and logging purposes.
      * </p>
      *
      * @since 1.0.0
      * @see MemoryStore
+     * @see ConductorRuntimeException
      */
-    public static class MemoryStoreException extends RuntimeException {
+    public static class MemoryStoreException extends ConductorRuntimeException {
         /**
          * Constructs a new MemoryStoreException with the specified detail message.
          *
@@ -90,6 +231,15 @@ public class ConductorException extends Exception {
      * Specialized subclasses provide more specific error handling for common
      * LLM provider issues.
      * </p>
+     * <p>
+     * Enhanced with provider-specific context including:
+     * </p>
+     * <ul>
+     * <li>Provider name and model information</li>
+     * <li>Request/response metadata</li>
+     * <li>Rate limit and quota details</li>
+     * <li>Retry recommendations</li>
+     * </ul>
      *
      * @since 1.0.0
      * @see LLMAuthenticationException
@@ -114,6 +264,63 @@ public class ConductorException extends Exception {
          */
         public LLMProviderException(String message, Throwable cause) {
             super(message, cause);
+        }
+
+        /**
+         * Constructs a new LLMProviderException with enhanced context.
+         *
+         * @param message the detail message explaining the LLM provider error
+         * @param context the enhanced context information
+         */
+        public LLMProviderException(String message, ExceptionContext context) {
+            super(message, context);
+        }
+
+        /**
+         * Constructs a new LLMProviderException with enhanced context and cause.
+         *
+         * @param message the detail message explaining the LLM provider error
+         * @param cause the underlying cause of the LLM provider failure
+         * @param context the enhanced context information
+         */
+        public LLMProviderException(String message, Throwable cause, ExceptionContext context) {
+            super(message, cause, context);
+        }
+
+        /**
+         * Gets the provider name from context metadata.
+         *
+         * @return provider name, or null if not available
+         */
+        public String getProviderName() {
+            return hasContext() ? getContext().getMetadata("provider.name", String.class) : null;
+        }
+
+        /**
+         * Gets the model name from context metadata.
+         *
+         * @return model name, or null if not available
+         */
+        public String getModelName() {
+            return hasContext() ? getContext().getMetadata("provider.model", String.class) : null;
+        }
+
+        /**
+         * Gets the HTTP status code from context metadata.
+         *
+         * @return HTTP status code, or null if not available
+         */
+        public Integer getHttpStatusCode() {
+            return hasContext() ? getContext().getMetadata("http.status", Integer.class) : null;
+        }
+
+        /**
+         * Gets the rate limit reset time from context metadata.
+         *
+         * @return rate limit reset time in seconds, or null if not available
+         */
+        public Long getRateLimitResetTime() {
+            return hasContext() ? getContext().getMetadata("rate_limit.reset_time", Long.class) : null;
         }
     }
 
@@ -184,6 +391,15 @@ public class ConductorException extends Exception {
      * such as invalid input parameters, external service failures, or
      * system resource limitations.
      * </p>
+     * <p>
+     * Enhanced with tool-specific context including:
+     * </p>
+     * <ul>
+     * <li>Tool name and type information</li>
+     * <li>Input parameters and validation details</li>
+     * <li>Execution environment metadata</li>
+     * <li>Fallback tool recommendations</li>
+     * </ul>
      *
      * @since 1.0.0
      * @see Tool
@@ -207,6 +423,63 @@ public class ConductorException extends Exception {
         public ToolExecutionException(String message, Throwable cause) {
             super(message, cause);
         }
+
+        /**
+         * Constructs a new ToolExecutionException with enhanced context.
+         *
+         * @param message the detail message explaining the tool execution failure
+         * @param context the enhanced context information
+         */
+        public ToolExecutionException(String message, ExceptionContext context) {
+            super(message, context);
+        }
+
+        /**
+         * Constructs a new ToolExecutionException with enhanced context and cause.
+         *
+         * @param message the detail message explaining the tool execution failure
+         * @param cause the underlying cause of the tool execution failure
+         * @param context the enhanced context information
+         */
+        public ToolExecutionException(String message, Throwable cause, ExceptionContext context) {
+            super(message, cause, context);
+        }
+
+        /**
+         * Gets the tool name from context metadata.
+         *
+         * @return tool name, or null if not available
+         */
+        public String getToolName() {
+            return hasContext() ? getContext().getMetadata("tool.name", String.class) : null;
+        }
+
+        /**
+         * Gets the tool type from context metadata.
+         *
+         * @return tool type, or null if not available
+         */
+        public String getToolType() {
+            return hasContext() ? getContext().getMetadata("tool.type", String.class) : null;
+        }
+
+        /**
+         * Gets the suggested fallback tool from context metadata.
+         *
+         * @return fallback tool name, or null if not available
+         */
+        public String getFallbackTool() {
+            return hasContext() ? getContext().getMetadata("tool.fallback", String.class) : null;
+        }
+
+        /**
+         * Gets the input validation error from context metadata.
+         *
+         * @return validation error message, or null if not available
+         */
+        public String getValidationError() {
+            return hasContext() ? getContext().getMetadata("validation.error", String.class) : null;
+        }
     }
 
     /**
@@ -218,7 +491,7 @@ public class ConductorException extends Exception {
      * </p>
      *
      * @since 1.0.0
-     * @see LLMPlanner
+     * @see LLMPlanMaker
      * @see PlannerOrchestrator
      */
     public static class PlannerException extends ConductorException {
@@ -239,6 +512,27 @@ public class ConductorException extends Exception {
          */
         public PlannerException(String message, Throwable cause) {
             super(message, cause);
+        }
+
+        /**
+         * Constructs a new PlannerException with enhanced context.
+         *
+         * @param message the detail message explaining the planning failure
+         * @param context the enhanced context information
+         */
+        public PlannerException(String message, ExceptionContext context) {
+            super(message, context);
+        }
+
+        /**
+         * Constructs a new PlannerException with enhanced context and cause.
+         *
+         * @param message the detail message explaining the planning failure
+         * @param cause the underlying cause of the planning failure
+         * @param context the enhanced context information
+         */
+        public PlannerException(String message, Throwable cause, ExceptionContext context) {
+            super(message, cause, context);
         }
     }
 }

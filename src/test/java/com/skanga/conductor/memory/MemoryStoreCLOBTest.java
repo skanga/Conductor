@@ -96,11 +96,11 @@ class MemoryStoreCLOBTest {
         };
 
         memoryStore.savePlan(workflowId, plan);
-        TaskDefinition[] retrievedPlan = memoryStore.loadPlan(workflowId);
+        TaskDefinition[] retrievedPlan = memoryStore.loadPlan(workflowId).orElse(null);
 
         assertNotNull(retrievedPlan, "Plan should be retrieved successfully");
         assertEquals(2, retrievedPlan.length, "Plan should have 2 tasks");
-        assertEquals("Description with unicode: 测试", retrievedPlan[0].description, "Unicode in description should be preserved");
+        assertEquals("Description with unicode: 测试", retrievedPlan[0].taskDescription, "Unicode in description should be preserved");
         assertTrue(retrievedPlan[0].promptTemplate.contains(complexJson), "Complex JSON in template should be preserved");
     }
 

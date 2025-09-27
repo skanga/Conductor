@@ -21,30 +21,33 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Manages isolated database instances for demo applications.
+ * Manages isolated database instances for agentic runs.
  * <p>
- * This class provides database isolation for demo runs to prevent interference
- * between concurrent or sequential demo executions. Each demo can have its own
- * database instance with automatic cleanup capabilities.
+ * This class provides database isolation for each agentic run to prevent interference
+ * between concurrent or sequential executions. Each run gets its own isolated database
+ * instance that is automatically cleaned up after completion, ensuring clean state
+ * and preventing database file accumulation.
  * </p>
  * <p>
  * Key features:
  * </p>
  * <ul>
- * <li>Automatic database isolation per demo run</li>
- * <li>Configurable cleanup strategies</li>
+ * <li>Automatic database isolation per agentic run</li>
+ * <li>Unique database paths with workflow ID and timestamp</li>
+ * <li>Automatic cleanup after run completion (configurable)</li>
  * <li>Database instance tracking and management</li>
- * <li>Resource cleanup and prevention of database file accumulation</li>
- * <li>Support for both temporary and persistent demo databases</li>
+ * <li>Optional preservation for debugging purposes</li>
+ * <li>Prevention of database file accumulation</li>
  * </ul>
  * <p>
  * Usage example:
  * </p>
  * <pre>
- * try (DemoDatabaseManager dbManager = new DemoDatabaseManager("demo-workflow-123")) {
+ * try (DemoDatabaseManager dbManager = new DemoDatabaseManager("book-creation-run-123")) {
  *     MemoryStore store = dbManager.createIsolatedMemoryStore();
- *     // Use the isolated memory store for demo operations
- * } // Automatic cleanup based on configuration
+ *     // Use the isolated memory store for agentic operations
+ *     // Database is automatically cleaned up after completion (unless preserved for debug)
+ * }
  * </pre>
  *
  * @since 1.0.0
@@ -78,15 +81,11 @@ public class DemoDatabaseManager implements AutoCloseable {
         }
 
         this.workflowId = workflowId.trim();
-        this.isTemporary = demoConfig.isDemoTemporary();
+        this.isTemporary = true; // All databases are now temporary by design
         this.activeStores = new ArrayList<>();
 
-        // Generate isolated database path
-        if (isTemporary) {
-            this.databasePath = generateTemporaryDatabasePath();
-        } else {
-            this.databasePath = generatePersistentDatabasePath();
-        }
+        // Generate isolated database path - all use the same pattern now
+        this.databasePath = generateIsolatedDatabasePath();
 
         this.databaseUrl = "jdbc:h2:" + databasePath;
 
@@ -159,12 +158,16 @@ public class DemoDatabaseManager implements AutoCloseable {
     }
 
     /**
-     * Checks if this database is temporary.
+     * Checks if this database will be cleaned up after the agentic run completes.
+     * <p>
+     * All databases are now designed to be cleaned up by default unless
+     * specifically preserved for debugging purposes.
+     * </p>
      *
      * @return true if the database will be cleaned up automatically
      */
     public boolean isTemporary() {
-        return isTemporary;
+        return shouldCleanupDatabase();
     }
 
     /**
@@ -267,24 +270,18 @@ public class DemoDatabaseManager implements AutoCloseable {
     }
 
     /**
-     * Generates a temporary database path using timestamp and UUID.
+     * Generates an isolated database path for this agentic run.
+     * <p>
+     * Each agentic run gets its own isolated database directory with a unique
+     * path that includes the workflow ID and timestamp for easy identification.
+     * </p>
      */
-    private String generateTemporaryDatabasePath() {
+    private String generateIsolatedDatabasePath() {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
         String uuid = UUID.randomUUID().toString().substring(0, 8);
-        String basePath = demoConfig.getDemoTempDatabaseDir();
+        String basePath = demoConfig.getDemoDatabaseBaseDir();
 
-        return basePath + "/demo-temp-" + timestamp + "-" + uuid;
-    }
-
-    /**
-     * Generates a persistent database path using workflow ID and timestamp.
-     */
-    private String generatePersistentDatabasePath() {
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-        String basePath = demoConfig.getDemoPersistentDatabaseDir();
-
-        return basePath + "/demo-" + workflowId + "-" + timestamp;
+        return basePath + "/" + workflowId + "-" + timestamp + "-" + uuid;
     }
 
     /**
@@ -305,9 +302,14 @@ public class DemoDatabaseManager implements AutoCloseable {
 
     /**
      * Determines if database cleanup should be performed.
+     * <p>
+     * Cleanup is performed unless explicitly disabled for debugging purposes.
+     * This ensures that each agentic run starts with a clean state and
+     * prevents database file accumulation.
+     * </p>
      */
     private boolean shouldCleanupDatabase() {
-        return isTemporary || demoConfig.isCleanupEnabled();
+        return demoConfig.isAutoCleanupEnabled() && !demoConfig.isPreserveForDebug();
     }
 
     /**

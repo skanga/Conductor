@@ -1,16 +1,15 @@
 package com.skanga.conductor.provider;
 
+import com.skanga.conductor.agent.ConversationalAgent;
 import com.skanga.conductor.exception.ConductorException;
-import com.skanga.conductor.orchestration.TaskInput;
-import com.skanga.conductor.agent.LLMSubAgent;
-import com.skanga.conductor.agent.LLMToolAgent;
+import com.skanga.conductor.execution.ExecutionInput;
 
 /**
  * Interface for Large Language Model (LLM) providers in the Conductor framework.
  * <p>
  * LLM providers abstract the interaction with various language models, allowing
  * the framework to work with different providers (OpenAI, Anthropic, local models, etc.)
- * through a unified interface. This enables easy switching between providers and
+ * through a standard interface. This enables easy switching between providers and
  * supports mock implementations for testing.
  * </p>
  * <p>
@@ -21,7 +20,7 @@ import com.skanga.conductor.agent.LLMToolAgent;
  *
  * @since 1.0.0
  * @see OpenAiLLMProvider
- * @see MockLLMProvider
+ * @see DemoMockLLMProvider
  */
 public interface LLMProvider {
 
@@ -49,8 +48,7 @@ public interface LLMProvider {
      * @throws Exception if the LLM request fails due to network issues, authentication errors,
      *                   quota exceeded, invalid prompt, or other service-related problems
      *
-     * @see LLMSubAgent#execute(TaskInput)
-     * @see LLMToolAgent#execute(TaskInput)
+     * @see ConversationalAgent#execute(ExecutionInput)
      */
     String generate(String prompt) throws ConductorException.LLMProviderException;
 }

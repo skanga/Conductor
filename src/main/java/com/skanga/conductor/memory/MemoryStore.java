@@ -1,6 +1,6 @@
 package com.skanga.conductor.memory;
 
-import com.google.gson.Gson;
+import com.skanga.conductor.utils.JsonUtils;
 import com.skanga.conductor.exception.ConductorException;
 import com.skanga.conductor.orchestration.TaskDefinition;
 import com.skanga.conductor.config.ApplicationConfig;
@@ -8,9 +8,11 @@ import com.skanga.conductor.config.ApplicationConfig;
 import java.sql.*;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.sql.DataSource;
@@ -157,6 +159,76 @@ public class MemoryStore implements AutoCloseable {
         return loadMemory(agentName, memoryConfig.getMaxMemoryEntries());
     }
 
+    /**
+     * Loads memory for multiple agents in a single database query to avoid N+1 queries.
+     * This method is optimized for bulk memory loading when processing multiple agents.
+     *
+     * @param agentNames the list of agent names to load memory for
+     * @param limit the maximum number of memory entries per agent
+     * @return a map where keys are agent names and values are lists of memory entries
+     * @throws SQLException if database operation fails
+     */
+    public Map<String, List<String>> loadMemoryBulk(List<String> agentNames, int limit) throws SQLException {
+        if (agentNames == null || agentNames.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        Map<String, List<String>> result = new HashMap<>();
+
+        // Initialize empty lists for all requested agents
+        for (String agentName : agentNames) {
+            result.put(agentName, new ArrayList<>());
+        }
+
+        // Build IN clause for SQL query
+        String placeholders = String.join(",", Collections.nCopies(agentNames.size(), "?"));
+        String query = """
+            SELECT agent_name, content FROM (
+                SELECT agent_name, content, ROW_NUMBER() OVER (PARTITION BY agent_name ORDER BY id ASC) as rn
+                FROM subagent_memory
+                WHERE agent_name IN (%s)
+            ) ranked
+            WHERE rn <= ?
+            ORDER BY agent_name, rn
+            """.formatted(placeholders);
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(query)) {
+
+            // Set agent name parameters
+            for (int i = 0; i < agentNames.size(); i++) {
+                ps.setString(i + 1, agentNames.get(i));
+            }
+            // Set limit parameter
+            ps.setInt(agentNames.size() + 1, limit);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String agentName = rs.getString("agent_name");
+                    String content = rs.getString("content");
+
+                    List<String> agentMemories = result.get(agentName);
+                    if (agentMemories != null) {
+                        agentMemories.add(content);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Loads memory for multiple agents using the default memory limit.
+     *
+     * @param agentNames the list of agent names to load memory for
+     * @return a map where keys are agent names and values are lists of memory entries
+     * @throws SQLException if database operation fails
+     */
+    public Map<String, List<String>> loadMemoryBulk(List<String> agentNames) throws SQLException {
+        return loadMemoryBulk(agentNames, memoryConfig.getMaxMemoryEntries());
+    }
+
     public void saveTaskOutput(String workflowId, String taskName, String output) {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
@@ -190,16 +262,15 @@ public class MemoryStore implements AutoCloseable {
     public void savePlan(String workflowId, TaskDefinition[] plan) throws SQLException {
         // Use H2's MERGE syntax instead of MySQL's ON DUPLICATE KEY UPDATE
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                     "MERGE INTO workflow_plans KEY(workflow_id) VALUES (?, ?)")) {
-            String json = new Gson().toJson(plan);
+             PreparedStatement ps = conn.prepareStatement("MERGE INTO workflow_plans KEY(workflow_id) VALUES (?, ?)")) {
+            String json = JsonUtils.toJson(plan);
             ps.setString(1, workflowId);
             ps.setString(2, json);
             ps.executeUpdate();
         }
     }
 
-    public TaskDefinition[] loadPlan(String workflowId) throws SQLException {
+    public Optional<TaskDefinition[]> loadPlan(String workflowId) throws SQLException {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
                      "SELECT plan_json FROM workflow_plans WHERE workflow_id=?")) {
@@ -207,11 +278,12 @@ public class MemoryStore implements AutoCloseable {
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     String json = rs.getString("plan_json");
-                    return new Gson().fromJson(json, TaskDefinition[].class);
+                    TaskDefinition[] plan = JsonUtils.fromJson(json, TaskDefinition[].class);
+                    return Optional.ofNullable(plan);
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     @Override

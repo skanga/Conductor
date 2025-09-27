@@ -1,11 +1,11 @@
 package com.skanga.conductor;
 
-import com.skanga.conductor.agent.LLMSubAgent;
+import com.skanga.conductor.agent.ConversationalAgent;
 import com.skanga.conductor.agent.SubAgent;
 import com.skanga.conductor.agent.SubAgentRegistry;
 import com.skanga.conductor.memory.MemoryStore;
-import com.skanga.conductor.orchestration.TaskInput;
-import com.skanga.conductor.orchestration.TaskResult;
+import com.skanga.conductor.execution.ExecutionInput;
+import com.skanga.conductor.execution.ExecutionResult;
 import com.skanga.conductor.provider.MockLLMProvider;
 import com.skanga.conductor.config.ApplicationConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,12 +34,12 @@ class ThreadSafetyTest {
     }
 
     @Test
-    @DisplayName("Concurrent LLMSubAgent memory operations")
+    @DisplayName("Concurrent ConversationalAgent memory operations")
     void testConcurrentMemoryOperations() throws Exception {
         MockLLMProvider mockProvider = new MockLLMProvider("test");
 
         try (MemoryStore store = new MemoryStore()) {
-            LLMSubAgent agent = new LLMSubAgent(
+            ConversationalAgent agent = new ConversationalAgent(
                 "test-agent",
                 "Test agent for concurrency",
                 mockProvider,
@@ -59,8 +59,8 @@ class ThreadSafetyTest {
                     try {
                         for (int j = 0; j < OPERATIONS_PER_THREAD; j++) {
                             // Execute agent to add memory
-                            TaskInput input = new TaskInput("Test input " + threadId + "-" + j, null);
-                            TaskResult result = agent.execute(input);
+                            ExecutionInput input = new ExecutionInput("Test input " + threadId + "-" + j, null);
+                            ExecutionResult result = agent.execute(input);
                             results.add(result.output());
                             successCount.incrementAndGet();
 
@@ -86,7 +86,7 @@ class ThreadSafetyTest {
             // Verify all operations succeeded
             assertEquals(THREAD_COUNT * OPERATIONS_PER_THREAD, successCount.get());
 
-            // Verify final memory state (LLMSubAgent adds to memory, plus it's persisted to DB)
+            // Verify final memory state (ConversationalAgent adds to memory, plus it's persisted to DB)
             List<String> finalMemory = agent.getMemorySnapshot(Integer.MAX_VALUE);
             assertTrue(finalMemory.size() >= THREAD_COUNT * OPERATIONS_PER_THREAD,
                       "Memory should contain at least " + (THREAD_COUNT * OPERATIONS_PER_THREAD) + " entries, got " + finalMemory.size());
@@ -205,7 +205,7 @@ class ThreadSafetyTest {
                         String agentName = "agent-" + threadId + "-" + j;
                         MockLLMProvider provider = new MockLLMProvider("test");
 
-                        LLMSubAgent agent = new LLMSubAgent(
+                        ConversationalAgent agent = new ConversationalAgent(
                             agentName,
                             "Test agent",
                             provider,
@@ -250,9 +250,9 @@ class ThreadSafetyTest {
             SubAgentRegistry registry = new SubAgentRegistry();
 
             // Create multiple agents
-            List<LLMSubAgent> agents = new ArrayList<>();
+            List<ConversationalAgent> agents = new ArrayList<>();
             for (int i = 0; i < 5; i++) {
-                LLMSubAgent agent = new LLMSubAgent(
+                ConversationalAgent agent = new ConversationalAgent(
                     "stress-agent-" + i,
                     "Stress test agent " + i,
                     provider,
@@ -274,17 +274,17 @@ class ThreadSafetyTest {
                     try {
                         for (int j = 0; j < OPERATIONS_PER_THREAD; j++) {
                             // Randomly select an agent
-                            LLMSubAgent agent = agents.get(j % agents.size());
+                            ConversationalAgent agent = agents.get(j % agents.size());
 
                             // Execute agent
-                            TaskInput input = new TaskInput("Stress test " + threadId + "-" + j, null);
+                            ExecutionInput input = new ExecutionInput("Stress test " + threadId + "-" + j, null);
                             agent.execute(input);
 
                             // Access configuration
                             ApplicationConfig.getInstance().getMemoryConfig().getDefaultMemoryLimit();
 
                             // Access registry
-                            registry.get(agent.name());
+                            registry.get(agent.agentName());
 
                             // Database operations
                             store.addMemory("stress-" + threadId, "Stress data " + j);
@@ -310,7 +310,7 @@ class ThreadSafetyTest {
             assertEquals(THREAD_COUNT * OPERATIONS_PER_THREAD, totalOperations);
 
             // Verify data integrity
-            for (LLMSubAgent agent : agents) {
+            for (ConversationalAgent agent : agents) {
                 List<String> memory = agent.getMemorySnapshot(Integer.MAX_VALUE);
                 assertTrue(memory.size() > 0);
             }

@@ -1,0 +1,546 @@
+package com.skanga.conductor.workflow.config;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("VariableSubstitution Tests")
+class VariableSubstitutionTest {
+
+    private VariableSubstitution substitution;
+
+    @BeforeEach
+    void setUp() {
+        substitution = new VariableSubstitution();
+    }
+
+    @Test
+    @DisplayName("Should create VariableSubstitution with default built-in variables")
+    void testDefaultBuiltInVariables() {
+        // When
+        String timestamp = substitution.getVariable("timestamp");
+        String uuid = substitution.getVariable("uuid");
+        String date = substitution.getVariable("date");
+        String time = substitution.getVariable("time");
+        String userName = substitution.getVariable("user_name");
+
+        // Then
+        assertNotNull(timestamp);
+        assertNotNull(uuid);
+        assertNotNull(date);
+        assertNotNull(time);
+        assertNotNull(userName);
+
+        // Check format patterns
+        assertTrue(timestamp.matches("\\d{8}-\\d{6}"));
+        assertTrue(date.matches("\\d{8}"));
+        assertTrue(time.matches("\\d{6}"));
+        assertTrue(uuid.length() == 36); // Standard UUID length
+    }
+
+    @Test
+    @DisplayName("Should create VariableSubstitution with initial context")
+    void testInitialContext() {
+        // Given
+        Map<String, Object> initialContext = Map.of(
+            "app_name", "test-app",
+            "version", "1.0.0"
+        );
+
+        // When
+        VariableSubstitution substitutionWithContext = new VariableSubstitution(initialContext);
+
+        // Then
+        assertEquals("test-app", substitutionWithContext.getVariable("app_name"));
+        assertEquals("1.0.0", substitutionWithContext.getVariable("version"));
+    }
+
+    @Test
+    @DisplayName("Should substitute simple variables")
+    void testSimpleVariableSubstitution() {
+        // Given
+        substitution.setRuntimeVariable("project_name", "test-project");
+        substitution.addVariable("custom_var", "custom-value");
+
+        // When
+        String result1 = substitution.substitute("Project: ${project_name}");
+        String result2 = substitution.substitute("Custom: ${custom_var}");
+
+        // Then
+        assertEquals("Project: test-project", result1);
+        assertEquals("Custom: custom-value", result2);
+    }
+
+    @Test
+    @DisplayName("Should substitute variables with default values")
+    void testVariableSubstitutionWithDefaults() {
+        // When
+        String result1 = substitution.substitute("Value: ${nonexistent_var:-default_value}");
+        String result2 = substitution.substitute("Empty: ${empty_var:-fallback}");
+
+        // Then
+        assertEquals("Value: default_value", result1);
+        assertEquals("Empty: fallback", result2);
+    }
+
+    @Test
+    @DisplayName("Should substitute variables with dot notation")
+    void testDotNotationSubstitution() {
+        // Given
+        Map<String, Object> context = Map.of(
+            "stage", Map.of(
+                "result", Map.of(
+                    "title", "Generated Title",
+                    "metadata", Map.of("author", "AI Assistant")
+                )
+            )
+        );
+        substitution.setRuntimeContext(context);
+
+        // When
+        String result1 = substitution.substitute("Title: ${stage.result.title}");
+        String result2 = substitution.substitute("Author: ${stage.result.metadata.author}");
+
+        // Then
+        assertEquals("Title: Generated Title", result1);
+        assertEquals("Author: AI Assistant", result2);
+    }
+
+    @Test
+    @DisplayName("Should handle multiple variables in single string")
+    void testMultipleVariables() {
+        // Given
+        substitution.setRuntimeVariable("name", "TestApp");
+        substitution.setRuntimeVariable("version", "2.0");
+
+        // When
+        String result = substitution.substitute("App: ${name} v${version} (${timestamp})");
+
+        // Then
+        assertTrue(result.startsWith("App: TestApp v2.0"));
+        assertTrue(result.contains("("));
+        assertTrue(result.endsWith(")"));
+    }
+
+    @Test
+    @DisplayName("Should handle unresolved variables")
+    void testUnresolvedVariables() {
+        // When
+        String result = substitution.substitute("Unknown: ${unknown_variable}");
+
+        // Then
+        assertEquals("Unknown: ${unknown_variable}", result);
+    }
+
+    @Test
+    @DisplayName("Should handle empty and null strings")
+    void testEmptyAndNullStrings() {
+        // When & Then
+        assertNull(substitution.substitute(null));
+        assertEquals("", substitution.substitute(""));
+        assertEquals("no variables", substitution.substitute("no variables"));
+    }
+
+    @Test
+    @DisplayName("Should substitute in object structures")
+    void testObjectSubstitution() {
+        // Given
+        substitution.setRuntimeVariable("app_name", "MyApp");
+        substitution.setRuntimeVariable("port", "8080");
+
+        Map<String, Object> config = Map.of(
+            "application", Map.of(
+                "name", "${app_name}",
+                "server", Map.of("port", "${port}")
+            ),
+            "database", Arrays.asList("${app_name}_db", "localhost:5432")
+        );
+
+        // When
+        Object result = substitution.substituteObjectWithContext(config, new HashMap<>());
+
+        // Then
+        assertTrue(result instanceof Map);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultMap = (Map<String, Object>) result;
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> app = (Map<String, Object>) resultMap.get("application");
+        assertEquals("MyApp", app.get("name"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> server = (Map<String, Object>) app.get("server");
+        assertEquals("8080", server.get("port"));
+
+        @SuppressWarnings("unchecked")
+        List<String> database = (List<String>) resultMap.get("database");
+        assertEquals("MyApp_db", database.get(0));
+    }
+
+    @Test
+    @DisplayName("Should substitute workflow definition variables")
+    void testWorkflowDefinitionSubstitution() {
+        // Given
+        substitution.setRuntimeVariable("output_path", "/tmp/output");
+        substitution.setRuntimeVariable("app_name", "TestWorkflow");
+
+        WorkflowDefinition workflow = new WorkflowDefinition();
+
+        WorkflowDefinition.WorkflowSettings settings = new WorkflowDefinition.WorkflowSettings();
+        settings.setOutputDir("${output_path}");
+        workflow.setSettings(settings);
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("application_name", "${app_name}");
+        variables.put("static_value", "unchanged");
+        workflow.setVariables(variables);
+
+        WorkflowStage stage = new WorkflowStage();
+        stage.setName("test-stage");
+        stage.setOutputs(Arrays.asList("${output_path}/result.txt", "log.txt"));
+        workflow.setStages(Arrays.asList(stage));
+
+        // When
+        WorkflowDefinition result = substitution.substituteWorkflowVariables(workflow);
+
+        // Then
+        assertEquals("/tmp/output", result.getSettings().getOutputDir());
+        assertEquals("TestWorkflow", result.getVariables().get("application_name"));
+        assertEquals("unchanged", result.getVariables().get("static_value"));
+        assertEquals("/tmp/output/result.txt", result.getStages().get(0).getOutputs().get(0));
+        assertEquals("log.txt", result.getStages().get(0).getOutputs().get(1));
+    }
+
+    @Test
+    @DisplayName("Should substitute agent configuration variables")
+    void testAgentConfigSubstitution() {
+        // Given
+        substitution.setRuntimeVariable("llm_provider", "openai");
+        substitution.setRuntimeVariable("model_name", "gpt-4");
+
+        AgentConfigCollection agentConfig = new AgentConfigCollection();
+
+        Map<String, AgentDefinition> agents = new HashMap<>();
+        AgentDefinition agent = new AgentDefinition();
+        agent.setName("test-agent");
+        agent.setProvider("${llm_provider}");
+        agent.setModel("${model_name}");
+        agents.put("test-agent", agent);
+        agentConfig.setAgents(agents);
+
+        Map<String, AgentConfigCollection.PromptTemplate> templates = new HashMap<>();
+        AgentConfigCollection.PromptTemplate template = new AgentConfigCollection.PromptTemplate();
+        template.setSystem("You are ${app_name:-AI Assistant}");
+        template.setUser("Process this: ${input}");
+        templates.put("default", template);
+        agentConfig.setPromptTemplates(templates);
+
+        // When
+        AgentConfigCollection result = substitution.substituteAgentVariables(agentConfig);
+
+        // Then
+        AgentDefinition resultAgent = result.getAgents().get("test-agent");
+        assertEquals("openai", resultAgent.getProvider());
+        assertEquals("gpt-4", resultAgent.getModel());
+
+        AgentConfigCollection.PromptTemplate resultTemplate = result.getPromptTemplates().get("default");
+        assertEquals("You are AI Assistant", resultTemplate.getSystem());
+        assertEquals("Process this: ${input}", resultTemplate.getUser());
+    }
+
+    @Test
+    @DisplayName("Should substitute workflow context variables")
+    void testWorkflowContextSubstitution() {
+        // Given
+        substitution.setRuntimeVariable("session_id", "12345");
+
+        Map<String, Object> contextData = Map.of(
+            "runtime", Map.of("session", "${session_id}"),
+            "config", Map.of("timeout", "${default_timeout:-30000}")
+        );
+        WorkflowContext context = new WorkflowContext(contextData);
+
+        // When
+        WorkflowContext result = substitution.substituteContextVariables(context);
+
+        // Then
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultData = (Map<String, Object>) result.getData();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> runtime = (Map<String, Object>) resultData.get("runtime");
+        assertEquals("12345", runtime.get("session"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> config = (Map<String, Object>) resultData.get("config");
+        assertEquals("30000", config.get("timeout"));
+    }
+
+    @Test
+    @DisplayName("Should handle variable resolution priority")
+    void testVariableResolutionPriority() {
+        // Given - Set up different sources for the same variable
+        substitution.addVariable("test_var", "built-in-value");
+        System.setProperty("test_var", "system-property-value");
+        substitution.setRuntimeVariable("test_var", "runtime-value");
+
+        // When
+        String result = substitution.substitute("Value: ${test_var}");
+
+        // Then - Runtime context should have highest priority
+        assertEquals("Value: runtime-value", result);
+    }
+
+    @Test
+    @DisplayName("Should handle system properties and environment variables")
+    void testSystemAndEnvironmentVariables() {
+        // Given
+        System.setProperty("test.system.prop", "system-value");
+
+        // When
+        String systemResult = substitution.substitute("System: ${test.system.prop}");
+        String javaVersion = substitution.substitute("Java: ${java_version}");
+
+        // Then
+        assertEquals("System: system-value", systemResult);
+        assertTrue(javaVersion.startsWith("Java: "));
+        assertNotEquals("Java: ${java_version}", javaVersion);
+
+        // Cleanup
+        System.clearProperty("test.system.prop");
+    }
+
+    @Test
+    @DisplayName("Should handle type conversion correctly")
+    void testTypeConversion() {
+        // Given
+        substitution.setRuntimeVariable("number", 42);
+        substitution.setRuntimeVariable("boolean", true);
+        substitution.setRuntimeVariable("list", Arrays.asList("a", "b", "c"));
+
+        // When
+        String numberResult = substitution.substitute("Number: ${number}");
+        String booleanResult = substitution.substitute("Boolean: ${boolean}");
+        String listResult = substitution.substitute("List: ${list}");
+
+        // Then
+        assertEquals("Number: 42", numberResult);
+        assertEquals("Boolean: true", booleanResult);
+        assertTrue(listResult.startsWith("List: ["));
+    }
+
+    @Test
+    @DisplayName("Should create copy with different context")
+    void testWithContext() {
+        // Given
+        substitution.addVariable("global", "global-value");
+        Map<String, Object> newContext = Map.of("local", "local-value");
+
+        // When
+        VariableSubstitution copy = substitution.withContext(newContext);
+
+        // Then
+        assertEquals("global-value", copy.getVariable("global"));
+        assertEquals("local-value", copy.getVariable("local"));
+
+        // Original should not have local variable
+        assertEquals("${local}", substitution.getVariable("local"));
+    }
+
+    @Test
+    @DisplayName("Should substitute with temporary context")
+    void testSubstituteWithContext() {
+        // Given
+        Map<String, Object> tempContext = Map.of("temp_var", "temp-value");
+
+        // When
+        String result = substitution.substituteWithContext("Temp: ${temp_var}", tempContext);
+
+        // Then
+        assertEquals("Temp: temp-value", result);
+
+        // Should not affect the main instance
+        assertEquals("${temp_var}", substitution.substitute("${temp_var}"));
+    }
+
+    @Test
+    @DisplayName("Should substitute object with temporary context")
+    void testSubstituteObjectWithContext() {
+        // Given
+        Map<String, Object> tempContext = Map.of("key", "value");
+        Map<String, Object> obj = Map.of("test", "${key}");
+
+        // When
+        Object result = substitution.substituteObjectWithContext(obj, tempContext);
+
+        // Then
+        assertTrue(result instanceof Map);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultMap = (Map<String, Object>) result;
+        assertEquals("value", resultMap.get("test"));
+    }
+
+    @Test
+    @DisplayName("Should manage runtime context correctly")
+    void testRuntimeContextManagement() {
+        // Test setting context
+        Map<String, Object> context1 = Map.of("var1", "value1", "var2", "value2");
+        substitution.setRuntimeContext(context1);
+        assertEquals(context1, substitution.getRuntimeContext());
+
+        // Test updating context
+        Map<String, Object> context2 = Map.of("var2", "updated2", "var3", "value3");
+        substitution.updateRuntimeContext(context2);
+
+        Map<String, Object> merged = substitution.getRuntimeContext();
+        assertEquals("value1", merged.get("var1"));
+        assertEquals("updated2", merged.get("var2"));
+        assertEquals("value3", merged.get("var3"));
+
+        // Test setting individual variable
+        substitution.setRuntimeVariable("var4", "value4");
+        assertEquals("value4", substitution.getRuntimeContext().get("var4"));
+
+        // Test clearing context
+        substitution.clearRuntimeContext();
+        assertTrue(substitution.getRuntimeContext().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Should handle null inputs gracefully")
+    void testNullInputHandling() {
+        // Test null workflow definition
+        assertNull(substitution.substituteWorkflowVariables(null));
+
+        // Test null agent config
+        assertNull(substitution.substituteAgentVariables(null));
+
+        // Test null workflow context
+        assertNull(substitution.substituteContextVariables(null));
+
+        // Test null object substitution
+        assertNull(substitution.substituteInObject(null));
+
+        // Test null context updates
+        assertDoesNotThrow(() -> {
+            substitution.updateRuntimeContext(null);
+            substitution.setRuntimeContext(null);
+        });
+    }
+
+    @Test
+    @DisplayName("Should handle complex nested structures")
+    void testComplexNestedStructures() {
+        // Given
+        substitution.setRuntimeVariable("app", "MyApp");
+        substitution.setRuntimeVariable("env", "production");
+
+        Map<String, Object> complex = Map.of(
+            "services", Map.of(
+                "${app}", Map.of(
+                    "environment", "${env}",
+                    "replicas", 3,
+                    "config", Arrays.asList(
+                        "${app}-config-${env}",
+                        "common-config"
+                    )
+                )
+            ),
+            "metadata", Arrays.asList(
+                Map.of("key", "app", "value", "${app}"),
+                Map.of("key", "env", "value", "${env}")
+            )
+        );
+
+        // When
+        Object result = substitution.substituteInObject(complex);
+
+        // Then
+        assertTrue(result instanceof Map);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultMap = (Map<String, Object>) result;
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> services = (Map<String, Object>) resultMap.get("services");
+        assertTrue(services.containsKey("MyApp"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> myAppService = (Map<String, Object>) services.get("MyApp");
+        assertEquals("production", myAppService.get("environment"));
+        assertEquals(3, myAppService.get("replicas"));
+
+        @SuppressWarnings("unchecked")
+        List<String> config = (List<String>) myAppService.get("config");
+        assertEquals("MyApp-config-production", config.get(0));
+        assertEquals("common-config", config.get(1));
+    }
+
+    @Test
+    @DisplayName("Should handle concurrent variable substitution")
+    void testConcurrentSubstitution() throws InterruptedException {
+        // Given
+        substitution.setRuntimeVariable("shared_var", "shared-value");
+
+        int threadCount = 10;
+        Thread[] threads = new Thread[threadCount];
+        String[] results = new String[threadCount];
+        Exception[] exceptions = new Exception[threadCount];
+
+        // When
+        for (int i = 0; i < threadCount; i++) {
+            final int index = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    // Each thread substitutes variables with thread-specific context
+                    Map<String, Object> threadContext = Map.of("thread_id", "thread-" + index);
+                    results[index] = substitution.substituteWithContext(
+                        "Shared: ${shared_var}, Thread: ${thread_id}",
+                        threadContext
+                    );
+                } catch (Exception e) {
+                    exceptions[index] = e;
+                }
+            });
+            threads[i].start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        // Then
+        for (int i = 0; i < threadCount; i++) {
+            assertNull(exceptions[i], "Thread " + i + " should not have thrown an exception");
+            assertNotNull(results[i], "Thread " + i + " should have produced a result");
+            assertEquals("Shared: shared-value, Thread: thread-" + i, results[i]);
+        }
+    }
+
+    @Test
+    @DisplayName("Should handle special regex characters in variable values")
+    void testSpecialRegexCharacters() {
+        // Given
+        substitution.setRuntimeVariable("special_chars", "$1 \\backslash [brackets] (parens)");
+
+        // When
+        String result = substitution.substitute("Value: ${special_chars}");
+
+        // Then
+        assertEquals("Value: $1 \\backslash [brackets] (parens)", result);
+    }
+
+    @Test
+    @DisplayName("Should handle malformed variable patterns")
+    void testMalformedVariablePatterns() {
+        // When & Then - These should not cause substitution
+        assertEquals("${", substitution.substitute("${"));
+        assertEquals("${}", substitution.substitute("${}"));
+        assertEquals("${unclosed", substitution.substitute("${unclosed"));
+        assertEquals("$variable", substitution.substitute("$variable"));
+        assertEquals("{variable}", substitution.substitute("{variable}"));
+    }
+}

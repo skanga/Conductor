@@ -1,12 +1,12 @@
 package com.skanga.conductor.metrics;
 
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.utils.SingletonHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 
@@ -24,7 +24,8 @@ import java.util.regex.Pattern;
  * systems, file output, or real-time dashboards.
  * </p>
  * <p>
- * Thread Safety: This class is thread-safe for concurrent access.
+ * The singleton instance is created using the generic SingletonHolder pattern for optimal
+ * thread safety and performance. This class is thread-safe for concurrent access.
  * </p>
  *
  * @since 1.0.0
@@ -35,7 +36,8 @@ public class MetricsRegistry {
 
     private static final Logger logger = LoggerFactory.getLogger(MetricsRegistry.class);
 
-    private static volatile MetricsRegistry instance;
+    private static final SingletonHolder<MetricsRegistry> HOLDER =
+        SingletonHolder.of(MetricsRegistry::new);
     private final List<MetricsCollector> collectors = new CopyOnWriteArrayList<>();
     private final List<Pattern> enabledPatterns = new CopyOnWriteArrayList<>();
     private final List<Pattern> disabledPatterns = new CopyOnWriteArrayList<>();
@@ -60,30 +62,32 @@ public class MetricsRegistry {
 
     /**
      * Returns the singleton instance of the metrics registry.
+     * <p>
+     * This method uses the generic SingletonHolder pattern for optimal
+     * thread safety and performance. The instance is created only once
+     * and subsequent calls return the same instance.
+     * </p>
      *
      * @return the singleton MetricsRegistry instance
      */
     public static MetricsRegistry getInstance() {
-        if (instance == null) {
-            synchronized (MetricsRegistry.class) {
-                if (instance == null) {
-                    instance = new MetricsRegistry();
-                }
-            }
-        }
-        return instance;
+        return HOLDER.get();
     }
 
     /**
-     * Resets the singleton instance (for testing purposes).
+     * Resets the singleton instance for testing purposes.
+     * <p>
+     * This method should only be used in test scenarios where you need
+     * to reset the metrics registry state between tests. It will properly
+     * shutdown the current instance before resetting.
+     * </p>
      */
     public static void resetInstance() {
-        synchronized (MetricsRegistry.class) {
-            if (instance != null) {
-                instance.shutdown();
-                instance = null;
-            }
+        MetricsRegistry current = HOLDER.getCurrentInstance();
+        if (current != null) {
+            current.shutdown();
         }
+        HOLDER.reset();
     }
 
     /**
@@ -94,7 +98,7 @@ public class MetricsRegistry {
      */
     public void register(MetricsCollector collector) {
         if (collector == null) {
-            throw new IllegalArgumentException("Metrics collector cannot be null");
+            throw new IllegalArgumentException("metrics collector cannot be null");
         }
 
         if (!collectors.contains(collector)) {

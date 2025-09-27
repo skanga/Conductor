@@ -1,5 +1,6 @@
 package com.skanga.conductor.config;
 
+import com.skanga.conductor.exception.ConfigurationException;
 import java.time.Duration;
 
 /**
@@ -101,6 +102,10 @@ public final class ConfigurationValidator {
 
     /**
      * Validates that a path is secure and doesn't contain dangerous patterns.
+     * <p>
+     * Performs comprehensive validation including path traversal, injection patterns,
+     * encoding attacks, and platform-specific security checks.
+     * </p>
      *
      * @param path the path to validate
      * @param propertyName the name of the property being validated (for error messages)
@@ -109,16 +114,171 @@ public final class ConfigurationValidator {
     public static void validateSecurePath(String path, String propertyName) {
         validateNotEmpty(path, propertyName);
 
+        // Basic path traversal check
         if (path.contains("..")) {
             throw new ConfigurationException(
                 String.format("%s cannot contain '..': %s", propertyName, path));
         }
 
-        // Check for other potentially dangerous patterns
-        if (path.contains("${") || path.contains("#{")) {
+        // Comprehensive injection pattern checks
+        if (containsInjectionPatterns(path)) {
             throw new ConfigurationException(
                 String.format("%s contains potentially dangerous expressions: %s", propertyName, path));
         }
+
+        // Encoded traversal checks
+        if (containsEncodedTraversalPatterns(path)) {
+            throw new ConfigurationException(
+                String.format("%s contains encoded path traversal: %s", propertyName, path));
+        }
+
+        // Platform-specific security checks
+        if (containsPlatformSpecificThreats(path)) {
+            throw new ConfigurationException(
+                String.format("%s contains platform-specific security threats: %s", propertyName, path));
+        }
+
+        // Control character and invisible character checks
+        if (containsDangerousCharacters(path)) {
+            throw new ConfigurationException(
+                String.format("%s contains dangerous characters: %s", propertyName, path));
+        }
+
+        // Length and complexity checks
+        if (path.length() > 4096) { // Reasonable path length limit
+            throw new ConfigurationException(
+                String.format("%s exceeds maximum length of 4096 characters: %d", propertyName, path.length()));
+        }
+
+        // Check for excessive nesting (potential zip bomb indicators)
+        int separatorCount = (int) path.chars().filter(c -> c == '/' || c == '\\').count();
+        if (separatorCount > 50) { // Reasonable nesting limit for configuration paths
+            throw new ConfigurationException(
+                String.format("%s has excessive path nesting (%d levels): %s", propertyName, separatorCount, path));
+        }
+    }
+
+    /**
+     * Checks for various injection patterns in configuration paths.
+     */
+    private static boolean containsInjectionPatterns(String path) {
+        String lowerPath = path.toLowerCase();
+        return path.contains("${") ||      // Java EL injection
+               path.contains("#{") ||      // EL injection
+               path.contains("%{") ||      // Apache Struts injection
+               path.contains("$(") ||      // Shell command substitution
+               path.contains("{{") ||      // Template injection (Handlebars, etc.)
+               path.contains("{%") ||      // Django/Jinja2 injection
+               path.contains("<%") ||      // JSP/ASP injection
+               path.contains("[%") ||      // Template Toolkit
+               lowerPath.contains("javascript:") || // JavaScript protocol
+               lowerPath.contains("vbscript:") ||   // VBScript protocol
+               lowerPath.contains("data:") ||       // Data URI scheme
+               path.contains("`") ||       // Shell execution
+               path.contains(";") ||       // Command separator
+               path.contains("&") ||       // Command chaining
+               path.contains("|");         // Pipe operations
+    }
+
+    /**
+     * Checks for encoded path traversal patterns.
+     */
+    private static boolean containsEncodedTraversalPatterns(String path) {
+        String lowerPath = path.toLowerCase();
+        return lowerPath.contains("%2e%2e") ||          // URL encoded ..
+               lowerPath.contains("%252e%252e") ||      // Double URL encoded ..
+               lowerPath.contains("\\u002e\\u002e") ||  // Unicode escaped ..
+               lowerPath.contains("\\x2e\\x2e") ||      // Hex escaped ..
+               lowerPath.contains("%u002e%u002e") ||    // Unicode URL encoded ..
+               lowerPath.contains("%c0%ae") ||          // Overlong UTF-8 encoded .
+               lowerPath.contains("%e0%80%ae") ||       // Another overlong UTF-8 .
+               lowerPath.contains("..%2f") ||           // Mixed encoded/unencoded
+               lowerPath.contains("..%5c") ||           // Mixed with backslash
+               lowerPath.contains("%2f..") ||           // Forward slash with ..
+               lowerPath.contains("%5c..") ||           // Backslash with ..
+               path.matches(".*\\.{3,}.*");            // Multiple dots (3 or more)
+    }
+
+    /**
+     * Checks for platform-specific security threats.
+     */
+    private static boolean containsPlatformSpecificThreats(String path) {
+        String upperPath = path.toUpperCase();
+
+        // Windows device names
+        String[] windowsDevices = {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        };
+
+        for (String device : windowsDevices) {
+            // Exact device name or device with extension
+            if (upperPath.equals(device) || upperPath.startsWith(device + ".")) {
+                return true;
+            }
+
+            // Device name as path component (must be preceded and followed by separators or end)
+            String devicePattern = "(?:^|[/\\\\])" + device + "(?:[/\\\\]|\\.|$)";
+            if (upperPath.matches(".*" + devicePattern + ".*")) {
+                return true;
+            }
+        }
+
+        // UNC path attempts
+        if (path.startsWith("\\\\")) {
+            return true;
+        }
+
+        // Drive letter access attempts (Windows)
+        if (path.matches("^[A-Za-z]:.*") || path.contains(":[/\\\\]")) {
+            return true;
+        }
+
+        // Check for system directory access attempts
+        String lowerPath = path.toLowerCase();
+
+        // Only block absolute paths to dangerous system directories
+        return lowerPath.startsWith("/system32/") || lowerPath.startsWith("\\system32\\") ||
+               lowerPath.startsWith("/windows/") || lowerPath.startsWith("\\windows\\") ||
+               lowerPath.equals("/etc/passwd") || lowerPath.equals("/etc/shadow") ||
+               lowerPath.startsWith("/etc/passwd/") || lowerPath.startsWith("/etc/shadow/") ||
+               lowerPath.startsWith("/boot/") || lowerPath.startsWith("\\boot\\") ||
+               lowerPath.startsWith("/proc/") || lowerPath.startsWith("/sys/");
+    }
+
+    /**
+     * Checks for dangerous control characters and invisible characters.
+     */
+    private static boolean containsDangerousCharacters(String path) {
+        for (char c : path.toCharArray()) {
+            // Control characters (0x00-0x1F and 0x7F-0x9F)
+            if ((c >= 0x00 && c <= 0x1F) || (c >= 0x7F && c <= 0x9F)) {
+                return true;
+            }
+
+            // Zero-width and invisible characters
+            if (c == '\u200B' || // Zero Width Space
+                c == '\u200C' || // Zero Width Non-Joiner
+                c == '\u200D' || // Zero Width Joiner
+                c == '\uFEFF' || // Zero Width No-Break Space (BOM)
+                c == '\u2060' || // Word Joiner
+                c == '\u202D' || // Left-to-Right Override
+                c == '\u202E' || // Right-to-Left Override
+                c == '\u2066' || // Left-to-Right Isolate
+                c == '\u2067' || // Right-to-Left Isolate
+                c == '\u2068' || // First Strong Isolate
+                c == '\u2069') { // Pop Directional Isolate
+                return true;
+            }
+
+            // Forbidden filename characters (Windows and general)
+            if (c == '<' || c == '>' || c == ':' || c == '"' ||
+                c == '|' || c == '?' || c == '*') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

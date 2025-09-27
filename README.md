@@ -22,11 +22,7 @@ Subagents are the workhorses of the framework. They are specialized AI agents th
 *   **Explicit**: Pre-defined, long-lived agents that are registered with the orchestrator and can be called by name.
 *   **Implicit**: Temporary, on-the-fly agents that are created dynamically to handle a specific task.
 
-The framework provides a `SubAgent` interface and several implementations, including:
-
-*   `LLMSubAgent`: A subagent that uses a Large Language Model (LLM) to perform its task.
-*   `ToolUsingAgent`: A subagent that can use a variety of tools to interact with its environment.
-*   `LLMToolAgent`: A subagent that uses an LLM to decide which tools to use to accomplish a task.
+The framework provides a `SubAgent` interface which is implemented by `ConversationalAgent` which is a subagent that uses a Large Language Model (LLM) to perform its task with conversational capabilities.
 
 ## Features
 
@@ -35,47 +31,167 @@ The framework provides a `SubAgent` interface and several implementations, inclu
 *   **Explicit and Implicit Agents**: Support for both pre-defined and on-the-fly agents.
 *   **Memory Persistence**: A `MemoryStore` that allows agents to maintain state across sessions.
 *   **Tool Use**: A flexible system for both programmatic and LLM-assisted tool use.
+*   **Retry System**: Robust retry mechanisms with configurable policies (NoRetry, FixedDelay, ExponentialBackoff).
+*   **Metrics Collection**: Comprehensive metrics and monitoring system with timer contexts and aggregated summaries.
+*   **Security**: Secure tool execution with command injection prevention and configurable whitelists.
+*   **Comprehensive Testing**: Extensive unit test coverage with 220+ tests using JUnit 5 and Mockito.
+*   **YAML Workflows**: YAML-based workflow definition system enabling configuration-driven AI applications without code changes.
+*   **Unified Architecture**: Both code-based and YAML-configured workflows use identical underlying execution primitives, ensuring consistent behavior.
+*   **Human Approval System**: Built-in approval workflows with interactive console interface and timeout support.
 *   **Extensible**: The framework is designed to be extensible, allowing you to create your own custom agents, tools, and providers.
 *   **Java-based**: Built on Java 21 and `langchain4j`, providing a modern and robust foundation.
 
 ## Getting Started
 
-### Prerequisites
+### Quick Start (2 Minutes)
 
-*   Java 21 or higher
-*   Apache Maven
+**Prerequisites**: Java 21+ and Maven 3.6+
+
+```bash
+# Clone and run demo in one command
+git clone <repository-url> && cd Conductor
+mvn clean install && mvn exec:java@book-demo -Dexec.args="Quick Demo"
+```
+
+**Expected Output**: ✅ Book creation completed! Check `output/` folder for generated content.
+
+### Development Setup
+
+For comprehensive development environment setup including IDE configuration, testing setup, and troubleshooting guides, see **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)**.
+
+#### Prerequisites
+
+| Requirement | Minimum | Recommended | Purpose |
+|-------------|---------|-------------|---------|
+| **Java** | 21.0.0 | 21.0.8+ LTS | Core runtime |
+| **Maven** | 3.6.0 | 3.9.0+ | Build management |
+| **Memory** | 2 GB RAM | 8 GB RAM | LLM operations |
+| **Storage** | 500 MB | 2 GB | Models and outputs |
+
+#### Quick Environment Check
+```bash
+java --version    # Should show 21.x.x
+mvn --version     # Should show 3.6+
+echo $JAVA_HOME   # Should point to Java 21
+```
 
 ### Building the Project
 
-To build the project, run the following command from the root directory:
-
+#### Standard Build
 ```bash
 mvn clean install
 ```
 
-### Running the Demos
-
-The project includes several demo applications that showcase the framework's capabilities.
-
-**1. Mock Demo (`DemoMock`)**
-
-This demo demonstrates the core orchestration features, including the creation of a book writing workflow with implicit agents and the use of an explicit agent with memory persistence.
-
-To run the mock demo:
-
+#### Development Build (Faster)
 ```bash
-mvn exec:java -Dexec.mainClass="com.skanga.conductor.demo.DemoMock"
+mvn clean compile -DskipTests    # Skip tests for faster iteration
+mvn test -Dtest=ClassName        # Run specific tests
 ```
 
-**2. Tools Demo (`DemoTools`)**
+#### Build Profiles
+```bash
+mvn clean install -Pdev          # Development profile
+mvn clean install -Pproduction   # Production optimizations
+```
 
-This demo showcases the tool-using capabilities of the framework, with both programmatic and LLM-assisted tool use.
+### Running Demos
 
-To run the tools demo:
+#### 1. Book Creation Demo (Recommended)
+Showcases comprehensive multi-agent book writing workflow:
 
 ```bash
-mvn exec:java -Dexec.mainClass="com.skanga.conductor.demo.DemoTools"
+# Basic usage
+mvn exec:java@book-demo -Dexec.args="AI-Powered Content Creation"
+
+# With custom output directory
+mvn exec:java@book-demo -Dexec.args="Your Topic" -Dconductor.output.dir="./my-books"
+
+# Debug mode with verbose logging
+mvn exec:java@book-demo -Dexec.args="Debug Topic" -Dconductor.debug=true
 ```
+
+**Output Location**: `output/book_[topic]_[timestamp]/`
+
+#### 2. YAML Workflow Demos
+Configuration-driven workflows without code changes:
+
+```bash
+# Run iterative book creation workflow
+mvn exec:java -Dexec.mainClass="com.skanga.conductor.workflow.runners.WorkflowRunner" \
+  -Dexec.args="src/main/resources/yaml/workflows/iterative-book-creation.yaml"
+
+# Tool demonstration workflow
+mvn exec:java -Dexec.mainClass="com.skanga.conductor.workflow.runners.WorkflowRunner" \
+  -Dexec.args="src/main/resources/yaml/workflows/tool-demo.yaml"
+```
+
+See **[DEMOS.md](DEMOS.md)** for comprehensive information about all available demo applications.
+
+### Development Workflow
+
+#### Quick Development Cycle
+```bash
+# 1. Make changes to source code
+# 2. Quick compile check
+mvn compile
+
+# 3. Run specific tests
+mvn test -Dtest="*YourFeature*"
+
+# 4. Test with demo
+mvn exec:java@book-demo -Dexec.args="Test Topic"
+
+# 5. Full verification before commit
+mvn clean install
+```
+
+#### IDE Integration
+- **IntelliJ IDEA**: Import as Maven project, install Lombok plugin
+- **VS Code**: Install Java Extension Pack, configure workspace settings
+- **Eclipse**: Import as Existing Maven Project
+
+See **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)** for detailed IDE configuration guides.
+
+### Testing
+
+#### Run All Tests
+```bash
+mvn test                          # All unit tests (~220 tests)
+mvn verify                        # Include integration tests
+```
+
+#### Focused Testing
+```bash
+mvn test -Dtest=WorkflowTest              # Specific test class
+mvn test -Dtest="*Agent*"                 # Pattern matching
+mvn test -Dtest=WorkflowTest#testMethod   # Specific test method
+```
+
+#### Test Categories
+```bash
+mvn test -Dgroups="unit"                  # Unit tests only
+mvn test -Dgroups="integration"           # Integration tests only
+mvn test -Dgroups="security"              # Security tests only
+```
+
+#### Performance Testing
+```bash
+mvn test -Dtest=ThreadSafetyTest          # Concurrency tests
+mvn test -Dtest="*Performance*"          # Performance benchmarks
+```
+
+### Troubleshooting
+
+#### Common Issues
+
+| Issue | Solution | Reference |
+|-------|----------|-----------|
+| `UnsupportedClassVersionError` | Verify Java 21+ with `java --version` | [Setup Guide](DEVELOPER_SETUP.md#java-installation-options) |
+| `OutOfMemoryError` | Increase Maven memory: `export MAVEN_OPTS="-Xmx4g"` | [Troubleshooting](DEVELOPER_SETUP.md#troubleshooting-guide) |
+| Tests fail with DB locks | Clean test databases: `find target -name "*.db" -delete` | [Testing Guide](TESTING.md) |
+| Build hangs during tests | Skip tests: `mvn install -DskipTests` | [Build Options](DEVELOPER_SETUP.md#building-the-project) |
+
+For comprehensive troubleshooting including IDE issues, environment problems, and debugging techniques, see **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md#troubleshooting-guide)**.
 
 ## Project Structure
 
@@ -86,7 +202,13 @@ The project is organized into the following key packages:
 *   `com.skanga.conductor.tools`: Contains the `Tool` interface and related classes for tool use.
 *   `com.skanga.conductor.memory`: Contains the `MemoryStore` for agent state persistence.
 *   `com.skanga.conductor.provider`: Contains the `LLMProvider` interface for integrating with different LLM providers.
+*   `com.skanga.conductor.retry`: Contains retry policies and execution logic for resilient operations.
+*   `com.skanga.conductor.metrics`: Contains metrics collection and monitoring infrastructure.
+*   `com.skanga.conductor.config`: Contains configuration management and validation.
+*   `com.skanga.conductor.engine`: Contains the unified workflow execution engine and builder patterns.
 *   `com.skanga.conductor.demo`: Contains the demo applications.
+*   `com.skanga.conductor.workflow`: Contains the YAML-based workflow system including configuration models, execution engine, and demo applications.
+*   `src/test/java`: Contains comprehensive unit tests for all framework components.
 
 ## Usage
 
@@ -101,7 +223,7 @@ Orchestrator orchestrator = new Orchestrator(registry, memoryStore);
 ### Creating an Explicit Agent
 
 ```java
-LLMSubAgent explicitAgent = new LLMSubAgent(
+ConversationalAgent explicitAgent = new ConversationalAgent(
     "my-explicit-agent",
     "An agent that can answer questions.",
     new MockLLMProvider(),
@@ -128,17 +250,35 @@ TaskResult result = implicitAgent.execute(new TaskInput("This is a long text..."
 System.out.println(result.output());
 ```
 
+### Using the Unified Workflow Engine
+
+Both code-based and YAML workflows use the same underlying execution primitives:
+
+```java
+// Code-based approach using WorkflowBuilder
+List<StageDefinition> stages = WorkflowBuilder.create()
+    .addStage("title-generation", "title-generator", "Expert title generator",
+              llmProvider, systemPrompt, promptTemplate, maxRetries, validator, metadata)
+    .build();
+
+DefaultWorkflowEngine engine = new DefaultWorkflowEngine(orchestrator);
+WorkflowResult result = engine.executeWorkflow(stages);
+
+// No-code approach using YAML adapter
+YamlWorkflowEngine adapter = new YamlWorkflowEngine(orchestrator, llmProvider);
+adapter.loadConfiguration("workflow.yaml", "agents.yaml", "context.yaml");
+WorkflowResult yamlResult = adapter.executeWorkflow(context);
+
+// Both produce identical WorkflowResult objects with same behavior
+```
+
 ## Configuration
 
-The demo applications can be configured via the `demo.properties` file located in `src/main/resources`. You can also override these properties using environment variables.
+See [CONFIGURATION.md](CONFIGURATION.md) for comprehensive configuration documentation.
 
-## Dependencies
+## Architecture Components
 
-*   [langchain4j](https://github.com/langchain4j/langchain4j): A Java library for building applications with LLMs.
-*   [H2 Database](https://www.h2database.com): An in-memory and persistent database.
-*   [SLF4J](https://www.slf4j.org/) and [Logback](https://logback.qos.ch/): For logging.
-*   [Gson](https://github.com/google/gson): For JSON serialization and deserialization.
-*   [JUnit 5](https://junit.org/junit5/): For testing.
+See [TECHNICAL_FEATURES.md](TECHNICAL_FEATURES.md) for detailed information about advanced technical features including thread safety, templating system, and text-to-speech integration.
 
 ## Contributing
 

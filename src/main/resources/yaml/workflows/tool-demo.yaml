@@ -1,0 +1,42 @@
+workflow:
+  name: "tool-demo"
+  description: "Demonstrates tool-based agents in action"
+  version: "1.0"
+
+settings:
+  output_dir: "data/tool-demo-${timestamp}"
+  max_retries: 2
+
+stages:
+  - name: "research-stage"
+    description: "Research a topic using tool-based agents"
+    agents:
+      researcher: "research-assistant"
+    approval:
+      required: false
+    outputs:
+      - "01-research-${timestamp}.md"
+
+  - name: "file-processing-stage"
+    description: "Process and analyze files"
+    agents:
+      processor: "file-processor"
+    approval:
+      required: false
+    outputs:
+      - "02-analysis-${timestamp}.md"
+
+  - name: "code-execution-stage"
+    description: "Execute code and commands"
+    agents:
+      executor: "code-executor"
+    approval:
+      required: false
+    outputs:
+      - "03-execution-${timestamp}.md"
+
+variables:
+  topic: "${DEMO_TOPIC:-Tool-based Agent Capabilities}"
+  research_query: "research: ${topic}"
+  file_path: "readfile: README.md"
+  code_command: "run: echo 'Tool demo completed successfully'"

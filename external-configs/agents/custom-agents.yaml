@@ -1,0 +1,188 @@
+agents:
+  title-generator:
+    type: "llm"
+    role: "Generates compelling book titles and subtitles"
+    provider: "${LLM_PROVIDER:-openai}"
+    model: "${LLM_MODEL:-gpt-4}"
+    prompt_template: "title-generation"
+
+  title-reviewer:
+    type: "llm"
+    role: "Reviews and improves book titles for marketability"
+    provider: "${LLM_PROVIDER:-openai}"
+    prompt_template: "title-review"
+
+  toc-generator:
+    type: "llm"
+    role: "Creates detailed table of contents with chapter descriptions"
+    prompt_template: "toc-generation"
+
+  toc-reviewer:
+    type: "llm"
+    role: "Reviews table of contents for structure and completeness"
+    prompt_template: "toc-review"
+
+  chapter-writer:
+    type: "llm"
+    role: "Writes comprehensive book chapters"
+    prompt_template: "chapter-writing"
+    context_window: 8000
+
+  chapter-reviewer:
+    type: "llm"
+    role: "Reviews chapter content for quality and coherence"
+    prompt_template: "chapter-review"
+
+  book-reviewer:
+    type: "llm"
+    role: "Reviews complete book for overall quality"
+    prompt_template: "book-review"
+
+prompt_templates:
+  title-generation:
+    system: |
+      You are an expert book title generator and marketing specialist.
+      Create compelling, marketable titles that capture attention and
+      clearly communicate the book's value proposition.
+    user: |
+      Generate a compelling title and subtitle for a book on: {{topic}}
+
+      Target audience: {{target_audience}}
+
+      Requirements:
+      - Title should be 3-8 words, memorable and impactful
+      - Subtitle should explain the benefit/approach
+      - Both should work together to convey expertise and value
+
+      Format your response as:
+      Title: [Your title here]
+      Subtitle: [Your subtitle here]
+
+  title-review:
+    system: |
+      You are a publishing marketing expert. Review titles for:
+      - Market appeal and memorability
+      - Clarity of value proposition
+      - Target audience alignment
+      - Competitive differentiation
+    user: |
+      Review this book title and subtitle:
+      Title: {{title}}
+      Subtitle: {{subtitle}}
+      Topic: {{topic}}
+      Target Audience: {{target_audience}}
+
+      Provide:
+      1. Overall assessment (1-10 rating)
+      2. Strengths and weaknesses
+      3. Specific improvement suggestions
+      4. Alternative suggestions if needed
+
+  toc-generation:
+    system: |
+      You are an expert instructional designer and book structuring specialist.
+      Create logical, comprehensive chapter outlines that build knowledge progressively.
+    user: |
+      Create a detailed table of contents for:
+      Title: {{title}}
+      Subtitle: {{subtitle}}
+      Topic: {{topic}}
+      Target Words per Chapter: {{target_words_per_chapter}}
+
+      Generate 6-10 chapters in JSON format:
+      {
+        "chapters": [
+          {
+            "number": 1,
+            "title": "Chapter Title",
+            "description": "What this chapter covers",
+            "keyPoints": ["Point 1", "Point 2", "Point 3"]
+          }
+        ]
+      }
+
+  toc-review:
+    system: |
+      You are an educational content expert. Review table of contents for:
+      - Logical progression and flow
+      - Comprehensive coverage of the topic
+      - Appropriate chapter balance
+      - Clear learning objectives
+    user: |
+      Review this table of contents:
+      {{content_to_review}}
+
+      For the book: {{title}} - {{subtitle}}
+      Topic: {{topic}}
+
+      Provide:
+      1. Overall structure assessment (1-10 rating)
+      2. Flow and progression analysis
+      3. Coverage gaps or redundancies
+      4. Specific improvement recommendations
+
+  chapter-writing:
+    system: |
+      You are an expert technical writer and educator.
+      Write comprehensive, well-structured chapters that are educational,
+      engaging, and provide practical value to readers.
+    user: |
+      Write a comprehensive chapter of {{target_words_per_chapter}}-{{max_words_per_chapter}} words.
+
+      Chapter Details:
+      Number: {{chapter_number}}
+      Title: {{chapter_title}}
+      Description: {{chapter_description}}
+      Key Points: {{chapter_key_points}}
+
+      Book Context:
+      Title: {{title}}
+      Topic: {{topic}}
+      Target Audience: {{target_audience}}
+
+      Requirements:
+      - Start with a compelling introduction
+      - Include practical examples and applications
+      - Use clear headings and subheadings
+      - End with a summary and key takeaways
+      - Write in markdown format
+
+  chapter-review:
+    system: |
+      You are a content quality expert. Review chapters for:
+      - Educational value and clarity
+      - Practical applicability
+      - Writing quality and flow
+      - Accuracy and completeness
+    user: |
+      Review this chapter content:
+      {{content_to_review}}
+
+      Chapter: {{chapter_title}}
+      Book: {{title}}
+      Target Words: {{target_words_per_chapter}}-{{max_words_per_chapter}}
+
+      Provide:
+      1. Quality assessment (1-10 rating)
+      2. Content strengths and weaknesses
+      3. Writing and structure feedback
+      4. Specific improvement suggestions
+
+  book-review:
+    system: |
+      You are a publishing editor and book quality expert.
+      Review complete manuscripts for overall coherence, quality,
+      and market readiness.
+    user: |
+      Review this complete book manuscript:
+      {{content_to_review}}
+
+      Book: {{title}} - {{subtitle}}
+      Topic: {{topic}}
+      Target Audience: {{target_audience}}
+
+      Provide:
+      1. Overall book assessment (1-10 rating)
+      2. Coherence and flow between chapters
+      3. Completeness and coverage analysis
+      4. Final publication readiness recommendations

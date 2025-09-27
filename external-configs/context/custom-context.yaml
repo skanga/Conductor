@@ -1,0 +1,27 @@
+runtime:
+  timestamp: "${current_timestamp}"
+  session_id: "${uuid}"
+
+input:
+  topic: "${BOOK_TOPIC}"
+  author: "${AUTHOR_NAME:-AI Assistant}"
+  target_audience: "${TARGET_AUDIENCE:-professionals}"
+
+providers:
+  primary: "${LLM_PROVIDER:-openai}"
+  fallback: "${FALLBACK_PROVIDER:-anthropic}"
+
+output:
+  base_directory: "data/workflow-books"
+  formats: ["markdown"]
+  preserve_intermediate: true
+
+human_interaction:
+  approval_required: true
+  approval_timeout: "300s"
+  auto_approve_in_ci: "${CI:-false}"
+
+metrics:
+  collect_timing: true
+  collect_token_usage: true
+  collect_quality_scores: true

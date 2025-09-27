@@ -1,5 +1,7 @@
 package com.skanga.conductor.orchestration;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Represents a single planned task definition for sub-agent creation.
  * <p>
@@ -19,7 +21,7 @@ package com.skanga.conductor.orchestration;
  * </ul>
  *
  * @since 1.0.0
- * @see LLMPlanner
+ * @see LLMPlanMaker
  * @see PlannerOrchestrator
  */
 public class TaskDefinition {
@@ -27,13 +29,15 @@ public class TaskDefinition {
      * The unique name for the sub-agent to be created.
      * Used for agent identification and registry lookup.
      */
-    public String name;
+    @JsonProperty("name")
+    public String taskName;
 
     /**
      * A human-readable description of the agent's purpose and capabilities.
      * Used for documentation and debugging purposes.
      */
-    public String description;
+    @JsonProperty("description")
+    public String taskDescription;
 
     /**
      * The prompt template that will be used by the sub-agent for LLM interactions.
@@ -50,18 +54,18 @@ public class TaskDefinition {
     /**
      * Creates a new task definition with the specified parameters.
      *
-     * @param name the unique name for the sub-agent
-     * @param description the description of the agent's purpose
+     * @param taskName the unique name for the sub-agent
+     * @param taskDescription the description of the agent's purpose
      * @param promptTemplate the template for LLM interactions
      */
-    public TaskDefinition(String name, String description, String promptTemplate) {
-        this.name = name;
-        this.description = description;
+    public TaskDefinition(String taskName, String taskDescription, String promptTemplate) {
+        this.taskName = taskName;
+        this.taskDescription = taskDescription;
         this.promptTemplate = promptTemplate;
     }
 
     @Override
     public String toString() {
-        return "TaskDefinition{name='%s', description='%s'}".formatted(name, description);
+        return "TaskDefinition{name='%s', description='%s'}".formatted(taskName, taskDescription);
     }
 }

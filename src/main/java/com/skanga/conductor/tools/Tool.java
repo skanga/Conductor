@@ -1,5 +1,8 @@
 package com.skanga.conductor.tools;
 
+import com.skanga.conductor.execution.ExecutionInput;
+import com.skanga.conductor.execution.ExecutionResult;
+
 /**
  * Interface for tools that can be used by agents in the Conductor framework.
  * <p>
@@ -17,8 +20,8 @@ package com.skanga.conductor.tools;
  * @since 1.0.0
  * @see FileReadTool
  * @see CodeRunnerTool
- * @see SimpleAudioTool
- * @see MockWebSearchTool
+ * @see TextToSpeechTool
+ * @see WebSearchTool
  */
 public interface Tool {
 
@@ -31,7 +34,7 @@ public interface Tool {
      *
      * @return the unique name of this tool, never null or empty
      */
-    String name();
+    String toolName();
 
     /**
      * Returns a human-readable description of this tool's functionality.
@@ -43,7 +46,7 @@ public interface Tool {
      *
      * @return a descriptive string explaining what this tool does, never null
      */
-    String description();
+    String toolDescription();
 
     /**
      * Executes the tool's functionality with the given input.
@@ -63,13 +66,13 @@ public interface Tool {
      * throwing exceptions when possible.
      * </p>
      *
-     * @param input the tool input containing parameters, text, and metadata
-     * @return the execution result containing output, success status, and optional metadata
+     * @param input the execution input containing content, metadata, and parameters
+     * @return the execution result containing success status, output, and optional metadata
      * @throws Exception if the tool execution fails due to system errors, invalid input,
      *                   network issues, or other unrecoverable problems
      *
-     * @see ToolInput
-     * @see ToolResult
+     * @see ExecutionInput
+     * @see ExecutionResult
      */
-    ToolResult run(ToolInput input) throws Exception;
+    ExecutionResult runTool(ExecutionInput input) throws Exception;
 }

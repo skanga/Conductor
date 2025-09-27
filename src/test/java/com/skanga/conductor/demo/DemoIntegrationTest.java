@@ -1,17 +1,16 @@
 package com.skanga.conductor.demo;
 
-import com.skanga.conductor.agent.LLMSubAgent;
-import com.skanga.conductor.agent.LLMToolAgent;
+import com.skanga.conductor.agent.ConversationalAgent;
 import com.skanga.conductor.agent.SubAgentRegistry;
-import com.skanga.conductor.agent.ToolUsingAgent;
+import com.skanga.conductor.exception.ConductorException;
 import com.skanga.conductor.memory.MemoryStore;
 import com.skanga.conductor.orchestration.Orchestrator;
 import com.skanga.conductor.orchestration.PlannerOrchestrator;
-import com.skanga.conductor.orchestration.TaskInput;
-import com.skanga.conductor.orchestration.TaskResult;
+import com.skanga.conductor.execution.ExecutionInput;
+import com.skanga.conductor.execution.ExecutionResult;
 import com.skanga.conductor.provider.LLMProvider;
 import com.skanga.conductor.provider.MockLLMProvider;
-import com.skanga.conductor.provider.MockPlannerProvider;
+import com.skanga.conductor.orchestration.MockPlannerProvider;
 import com.skanga.conductor.tools.*;
 import org.junit.jupiter.api.*;
 
@@ -34,9 +33,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * </p>
  *
  * @since 1.0.0
- * @see DemoMock
- * @see DemoMockPlanner
- * @see DemoTools
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("Demo Integration Test Harness")
@@ -86,7 +82,7 @@ class DemoIntegrationTest {
 
         // Create and register a test agent similar to DemoMock
         String agentName = "test-book-agent-" + System.currentTimeMillis();
-        LLMSubAgent bookAgent = new LLMSubAgent(
+        ConversationalAgent bookAgent = new ConversationalAgent(
                 agentName,
                 "Test book generation agent",
                 mockProvider,
@@ -104,7 +100,7 @@ class DemoIntegrationTest {
                 Testing multiple components together.
                 """;
 
-        TaskResult result = bookAgent.execute(new TaskInput(testSummary, null));
+        ExecutionResult result = bookAgent.execute(new ExecutionInput(testSummary, null));
 
         // Validate results
         assertNotNull(result, "Task result should not be null");
@@ -137,7 +133,7 @@ class DemoIntegrationTest {
                 """;
 
         String planWorkflowId = "test-plan-" + System.currentTimeMillis();
-        List<TaskResult> results = orchestrator.planAndExecute(
+        List<ExecutionResult> results = orchestrator.planAndExecute(
                 planWorkflowId,
                 userRequest,
                 plannerProvider,
@@ -151,7 +147,7 @@ class DemoIntegrationTest {
 
         // Verify all tasks completed successfully
         for (int i = 0; i < results.size(); i++) {
-            TaskResult result = results.get(i);
+            ExecutionResult result = results.get(i);
             assertNotNull(result, "Task result " + i + " should not be null");
             assertTrue(result.success(), "Task " + i + " should complete successfully");
             assertNotNull(result.output(), "Task " + i + " output should not be null");
@@ -177,25 +173,40 @@ class DemoIntegrationTest {
      */
     private void testProgrammaticToolUsage() throws Exception {
         String agentName = "test-prog-agent-" + System.currentTimeMillis();
-        ToolUsingAgent progAgent = new ToolUsingAgent(
+
+        // Create a mock provider that returns tool calls in JSON format
+        MockLLMProvider toolAwareMockProvider = new MockLLMProvider("tool-aware-test") {
+            @Override
+            public String generate(String prompt) throws ConductorException.LLMProviderException {
+                // Simulate the LLM deciding to use tools based on the prompt
+                if (prompt.contains("echo") || prompt.contains("run")) {
+                    return "{\"tool\": \"code_runner\", \"arguments\": \"echo Hello Integration Test\"}";
+                }
+                return super.generate(prompt);
+            }
+        };
+
+        ConversationalAgent progAgent = new ConversationalAgent(
                 agentName,
                 "Test programmatic tool agent",
+                toolAwareMockProvider,
                 toolRegistry,
                 memoryStore
         );
 
-        // Test tool execution with explicit directives
-        String toolCommands = "run: echo Hello Integration Test\nreadfile: nonexistent.txt";
-        TaskResult result = progAgent.execute(new TaskInput(toolCommands, null));
+        // Test with a prompt that should trigger tool usage
+        String prompt = "Please run the command: echo Hello Integration Test";
+        ExecutionResult result = progAgent.execute(new ExecutionInput(prompt, null));
 
         // Validate programmatic tool execution
         assertNotNull(result, "Programmatic tool result should not be null");
         assertTrue(result.success(), "Programmatic tool execution should succeed");
         assertNotNull(result.output(), "Programmatic tool output should not be null");
 
-        // Verify that tools were actually invoked
+        // Verify that the tool was actually invoked (output should contain the echo result)
         assertTrue(result.output().contains("Hello Integration Test") ||
-                  result.output().contains("echo"),
+                  result.output().contains("echo") ||
+                  result.output().contains("Command executed"),
                   "Output should indicate tool execution");
     }
 
@@ -204,7 +215,7 @@ class DemoIntegrationTest {
      */
     private void testLLMAssistedToolUsage() throws Exception {
         String agentName = "test-llm-agent-" + System.currentTimeMillis();
-        LLMToolAgent llmAgent = new LLMToolAgent(
+        ConversationalAgent llmAgent = new ConversationalAgent(
                 agentName,
                 "Test LLM tool agent",
                 mockProvider,
@@ -214,7 +225,7 @@ class DemoIntegrationTest {
 
         // Test LLM-driven tool selection
         String taskInput = "Please help me understand file reading by checking if a test file exists";
-        TaskResult result = llmAgent.execute(new TaskInput(taskInput, null));
+        ExecutionResult result = llmAgent.execute(new ExecutionInput(taskInput, null));
 
         // Validate LLM-assisted tool execution
         assertNotNull(result, "LLM tool result should not be null");
@@ -235,7 +246,7 @@ class DemoIntegrationTest {
 
         // Register essential tools for testing
         registry.register(new FileReadTool());
-        registry.register(new MockWebSearchTool());
+        registry.register(new WebSearchTool());
 
         // Use restricted CodeRunnerTool for testing
         Set<String> allowedCommands = Set.of("echo", "pwd", "whoami", "java");
@@ -253,7 +264,7 @@ class DemoIntegrationTest {
 
         // Create an orchestration scenario that uses multiple components
         String agentName = "test-integration-agent-" + System.currentTimeMillis();
-        LLMSubAgent integrationAgent = new LLMSubAgent(
+        ConversationalAgent integrationAgent = new ConversationalAgent(
                 agentName,
                 "Integration test agent",
                 mockProvider,
@@ -265,7 +276,7 @@ class DemoIntegrationTest {
 
         // Execute a task that would benefit from tool usage
         String complexTask = "Analyze the current directory structure and provide a summary";
-        TaskResult result = integrationAgent.execute(new TaskInput(complexTask, null));
+        ExecutionResult result = integrationAgent.execute(new ExecutionInput(complexTask, null));
 
         // Validate cross-component functionality
         assertNotNull(result, "Integration result should not be null");
@@ -289,7 +300,7 @@ class DemoIntegrationTest {
 
         // Create agent that might encounter errors
         String agentName = "test-error-agent-" + System.currentTimeMillis();
-        LLMSubAgent errorAgent = new LLMSubAgent(
+        ConversationalAgent errorAgent = new ConversationalAgent(
                 agentName,
                 "Error handling test agent",
                 mockProvider,
@@ -301,23 +312,24 @@ class DemoIntegrationTest {
 
         // Test with potentially problematic input
         String errorProneTask = "This is a test task with valid input";  // Valid task input
-        TaskResult result = errorAgent.execute(new TaskInput(errorProneTask, null));
+        ExecutionResult result = errorAgent.execute(new ExecutionInput(errorProneTask, null));
 
         // Validate error handling
         assertNotNull(result, "Error result should not be null");
         // Note: MockLLMProvider should handle empty input gracefully
 
         // Test with tool that might fail
-        ToolUsingAgent toolAgent = new ToolUsingAgent(
+        ConversationalAgent toolAgent = new ConversationalAgent(
                 "test-tool-error-agent-" + System.currentTimeMillis(),
                 "Tool error test agent",
+                mockProvider,
                 toolRegistry,
                 memoryStore
         );
 
         // Test with invalid tool command
         String invalidToolCommand = "invalidtool: this should not work";
-        TaskResult toolResult = toolAgent.execute(new TaskInput(invalidToolCommand, null));
+        ExecutionResult toolResult = toolAgent.execute(new ExecutionInput(invalidToolCommand, null));
 
         // Validate tool error handling
         assertNotNull(toolResult, "Tool error result should not be null");
@@ -338,7 +350,7 @@ class DemoIntegrationTest {
             String agentName = "test-perf-agent-" + i + "-" + System.currentTimeMillis();
             agentNames[i] = agentName;
 
-            LLMSubAgent perfAgent = new LLMSubAgent(
+            ConversationalAgent perfAgent = new ConversationalAgent(
                     agentName,
                     "Performance test agent " + i,
                     mockProvider,
@@ -349,7 +361,7 @@ class DemoIntegrationTest {
             registry.register(perfAgent);
 
             // Execute a simple task
-            TaskResult result = perfAgent.execute(new TaskInput("Simple task " + i, null));
+            ExecutionResult result = perfAgent.execute(new ExecutionInput("Simple task " + i, null));
 
             assertNotNull(result, "Performance test result " + i + " should not be null");
             assertTrue(result.success(), "Performance test " + i + " should succeed");

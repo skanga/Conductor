@@ -1,0 +1,30 @@
+context:
+  demo_info:
+    purpose: "Demonstrate tool-based agent capabilities"
+    timestamp: "${TIMESTAMP}"
+    user: "${USER:-Tool Demo User}"
+
+variables:
+  # Research configuration
+  research_topic: "${DEMO_TOPIC:-Advanced AI Agent Tool Integration}"
+  search_depth: "comprehensive"
+
+  # File processing configuration
+  target_files: ["README.md", "pom.xml", "NO_CODE_SYSTEM.md"]
+  analysis_type: "content_summary"
+
+  # Code execution configuration
+  execution_timeout: "30s"
+  command_type: "system_info"
+
+workflow_config:
+  tool_timeout: 60000  # 60 seconds
+  max_tool_calls: 10
+  enable_tool_logging: true
+  tool_retry_attempts: 3
+
+output_settings:
+  format: "markdown"
+  include_timestamps: true
+  include_tool_outputs: true
+  structured_content: true

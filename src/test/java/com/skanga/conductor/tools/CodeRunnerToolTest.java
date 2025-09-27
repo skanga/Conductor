@@ -1,5 +1,7 @@
 package com.skanga.conductor.tools;
 
+import com.skanga.conductor.execution.ExecutionInput;
+import com.skanga.conductor.execution.ExecutionResult;
 import org.junit.jupiter.api.*;
 import java.time.Duration;
 import java.util.Set;
@@ -23,17 +25,17 @@ class CodeRunnerToolTest {
     @Order(1)
     @DisplayName("Test basic tool properties")
     void testBasicProperties() {
-        assertEquals("code_runner", unrestricted.name());
-        assertTrue(unrestricted.description().contains("shell command"));
-        assertTrue(unrestricted.description().contains("safely"));
+        assertEquals("code_runner", unrestricted.toolName());
+        assertTrue(unrestricted.toolDescription().contains("shell command"));
+        assertTrue(unrestricted.toolDescription().contains("safely"));
     }
 
     @Test
     @Order(2)
     @DisplayName("Test simple command execution")
     void testSimpleCommandExecution() {
-        ToolInput input = new ToolInput("echo hello", null);
-        ToolResult result = unrestricted.run(input);
+        ExecutionInput input = new ExecutionInput("echo hello", null);
+        ExecutionResult result = unrestricted.runTool(input);
 
         assertTrue(result.success(), "Simple echo command should succeed");
         assertTrue(result.output().contains("hello"), "Output should contain expected text");
@@ -44,8 +46,8 @@ class CodeRunnerToolTest {
     @Order(3)
     @DisplayName("Test command with quoted arguments")
     void testQuotedArguments() {
-        ToolInput input = new ToolInput("echo \"hello world with spaces\"", null);
-        ToolResult result = unrestricted.run(input);
+        ExecutionInput input = new ExecutionInput("echo \"hello world with spaces\"", null);
+        ExecutionResult result = unrestricted.runTool(input);
 
         assertTrue(result.success(), "Command with quoted args should succeed");
         assertTrue(result.output().contains("hello world with spaces"), "Quoted argument should be preserved");
@@ -55,8 +57,8 @@ class CodeRunnerToolTest {
     @Order(4)
     @DisplayName("Test command with single quotes")
     void testSingleQuotes() {
-        ToolInput input = new ToolInput("echo 'single quoted text'", null);
-        ToolResult result = unrestricted.run(input);
+        ExecutionInput input = new ExecutionInput("echo 'single quoted text'", null);
+        ExecutionResult result = unrestricted.runTool(input);
 
         assertTrue(result.success(), "Command with single quotes should succeed");
         assertTrue(result.output().contains("single quoted text"), "Single quoted argument should be preserved");
@@ -67,8 +69,8 @@ class CodeRunnerToolTest {
     @DisplayName("Test command injection prevention")
     void testCommandInjectionPrevention() {
         // Test that command injection attempts are treated as literal arguments
-        ToolInput maliciousInput = new ToolInput("echo hello; rm dangerous.txt", null);
-        ToolResult result = unrestricted.run(maliciousInput);
+        ExecutionInput maliciousInput = new ExecutionInput("echo hello; rm dangerous.txt", null);
+        ExecutionResult result = unrestricted.runTool(maliciousInput);
 
         assertTrue(result.success(), "Command should execute successfully");
         assertTrue(result.output().contains("hello; rm dangerous.txt"),
@@ -81,8 +83,8 @@ class CodeRunnerToolTest {
     @Order(6)
     @DisplayName("Test command whitelist - allowed commands")
     void testAllowedCommands() {
-        ToolInput input = new ToolInput("echo allowed command", null);
-        ToolResult result = restricted.run(input);
+        ExecutionInput input = new ExecutionInput("echo allowed command", null);
+        ExecutionResult result = restricted.runTool(input);
 
         assertTrue(result.success(), "Allowed command should succeed");
         assertTrue(result.output().contains("allowed command"), "Output should contain expected text");
@@ -92,8 +94,8 @@ class CodeRunnerToolTest {
     @Order(7)
     @DisplayName("Test command whitelist - blocked commands")
     void testBlockedCommands() {
-        ToolInput input = new ToolInput("rm dangerous.txt", null);
-        ToolResult result = restricted.run(input);
+        ExecutionInput input = new ExecutionInput("rm dangerous.txt", null);
+        ExecutionResult result = restricted.runTool(input);
 
         assertFalse(result.success(), "Blocked command should fail");
         assertTrue(result.output().contains("Dangerous command blocked: rm"),
@@ -105,19 +107,19 @@ class CodeRunnerToolTest {
     @DisplayName("Test empty and null input handling")
     void testEmptyInput() {
         // Test empty command
-        ToolResult emptyResult = unrestricted.run(new ToolInput("", null));
+        ExecutionResult emptyResult = unrestricted.runTool(new ExecutionInput("", null));
         assertFalse(emptyResult.success(), "Empty command should fail");
         assertTrue(emptyResult.output().contains("Command cannot be empty"),
                   "Should indicate no command provided");
 
         // Test null command
-        ToolResult nullResult = unrestricted.run(new ToolInput(null, null));
+        ExecutionResult nullResult = unrestricted.runTool(new ExecutionInput(null, null));
         assertFalse(nullResult.success(), "Null command should fail");
         assertTrue(nullResult.output().contains("Command cannot be null"),
                   "Should indicate no command provided");
 
         // Test whitespace-only command
-        ToolResult whitespaceResult = unrestricted.run(new ToolInput("   ", null));
+        ExecutionResult whitespaceResult = unrestricted.runTool(new ExecutionInput("   ", null));
         assertFalse(whitespaceResult.success(), "Command cannot be empty");
     }
 
@@ -126,18 +128,18 @@ class CodeRunnerToolTest {
     @DisplayName("Test command parsing edge cases")
     void testCommandParsingEdgeCases() {
         // Test mixed quotes
-        ToolInput mixedQuotes = new ToolInput("echo \"double\" 'single' unquoted", null);
-        ToolResult result = unrestricted.run(mixedQuotes);
+        ExecutionInput mixedQuotes = new ExecutionInput("echo \"double\" 'single' unquoted", null);
+        ExecutionResult result = unrestricted.runTool(mixedQuotes);
         assertTrue(result.success(), "Mixed quotes should be parsed correctly");
 
         // Test escaped quotes within quotes
-        ToolInput nestedQuotes = new ToolInput("echo \"text with 'nested' quotes\"", null);
-        ToolResult nestedResult = unrestricted.run(nestedQuotes);
+        ExecutionInput nestedQuotes = new ExecutionInput("echo \"text with 'nested' quotes\"", null);
+        ExecutionResult nestedResult = unrestricted.runTool(nestedQuotes);
         assertTrue(nestedResult.success(), "Nested quotes should be handled correctly");
 
         // Test multiple spaces
-        ToolInput multipleSpaces = new ToolInput("echo    multiple     spaces", null);
-        ToolResult spacesResult = unrestricted.run(multipleSpaces);
+        ExecutionInput multipleSpaces = new ExecutionInput("echo    multiple     spaces", null);
+        ExecutionResult spacesResult = unrestricted.runTool(multipleSpaces);
         assertTrue(spacesResult.success(), "Multiple spaces should be handled correctly");
     }
 
@@ -146,8 +148,8 @@ class CodeRunnerToolTest {
     @DisplayName("Test command that returns non-zero exit code")
     void testNonZeroExitCode() {
         // Use a command that will fail (trying to access non-existent file)
-        ToolInput input = new ToolInput("ls /non/existent/path", null);
-        ToolResult result = unrestricted.run(input);
+        ExecutionInput input = new ExecutionInput("ls /non/existent/path", null);
+        ExecutionResult result = unrestricted.runTool(input);
 
         assertFalse(result.success(), "Command with non-zero exit code should report failure");
         assertTrue(result.output().contains("ExitCode="), "Should include exit code in output");
@@ -173,13 +175,13 @@ class CodeRunnerToolTest {
         // Create a simple java command that will take longer than 50ms
         String longRunningCommand = "java -version"; // This typically takes more than 50ms
 
-        ToolInput input = new ToolInput(longRunningCommand, null);
-        ToolResult result = shortTimeout.run(input);
+        ExecutionInput input = new ExecutionInput(longRunningCommand, null);
+        ExecutionResult result = shortTimeout.runTool(input);
 
         // The command should either time out or complete but should generally be rejected by timing constraint
         // Since java -version is fast, let's test with an even shorter timeout
         CodeRunnerTool veryShortTimeout = new CodeRunnerTool(Duration.ofMillis(1), allowedCommands);
-        ToolResult result2 = veryShortTimeout.run(input);
+        ExecutionResult result2 = veryShortTimeout.runTool(input);
 
         // At least one should show timeout behavior
         boolean anyTimeout = result.output().contains("timed out") || result2.output().contains("timed out");
@@ -199,8 +201,8 @@ class CodeRunnerToolTest {
         };
 
         for (String command : traversalAttempts) {
-            ToolInput input = new ToolInput(command, null);
-            ToolResult result = unrestricted.run(input);
+            ExecutionInput input = new ExecutionInput(command, null);
+            ExecutionResult result = unrestricted.runTool(input);
 
             assertTrue(result.success(), "Path traversal attempt should be treated as echo argument");
             // The path should appear in output as literal text, not be interpreted
@@ -224,8 +226,8 @@ class CodeRunnerToolTest {
         };
 
         for (String command : specialInputs) {
-            ToolInput input = new ToolInput(command, null);
-            ToolResult result = unrestricted.run(input);
+            ExecutionInput input = new ExecutionInput(command, null);
+            ExecutionResult result = unrestricted.runTool(input);
 
             assertTrue(result.success(), "Command with special characters should succeed: " + command);
 
@@ -240,8 +242,8 @@ class CodeRunnerToolTest {
     @Order(14)
     @DisplayName("Test metadata content")
     void testMetadata() {
-        ToolInput input = new ToolInput("echo test metadata", null);
-        ToolResult result = unrestricted.run(input);
+        ExecutionInput input = new ExecutionInput("echo test metadata", null);
+        ExecutionResult result = unrestricted.runTool(input);
 
         assertTrue(result.success(), "Command should succeed");
         assertNotNull(result.metadata(), "Metadata should not be null");

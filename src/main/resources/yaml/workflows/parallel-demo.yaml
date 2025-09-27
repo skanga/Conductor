@@ -1,0 +1,108 @@
+workflow:
+  name: "parallel-demo"
+  description: "Demonstrates parallel stage execution with dependencies"
+  version: "1.0"
+
+settings:
+  output_dir: "data/parallel-demo-${timestamp}"
+  max_retries: 2
+  target_words_per_chapter: 500
+
+stages:
+  # Initial stage - must run first
+  - name: "initialization"
+    description: "Initialize the workflow"
+    agents:
+      initializer: "title-generator"
+    approval:
+      required: false
+    outputs:
+      - "00-init-${timestamp}.md"
+
+  # These two stages can run in parallel after initialization
+  - name: "research-phase-1"
+    description: "Research topics concurrently - Phase 1"
+    depends_on: ["initialization"]
+    parallel: true
+    agents:
+      researcher: "research-assistant"
+    approval:
+      required: false
+    outputs:
+      - "01-research-1-${timestamp}.md"
+
+  - name: "research-phase-2"
+    description: "Research topics concurrently - Phase 2"
+    depends_on: ["initialization"]
+    parallel: true
+    agents:
+      researcher: "research-assistant"
+    approval:
+      required: false
+    outputs:
+      - "01-research-2-${timestamp}.md"
+
+  # Another set of parallel stages that depend on both research phases
+  - name: "analysis-content"
+    description: "Analyze content structure"
+    depends_on: ["research-phase-1", "research-phase-2"]
+    parallel: true
+    agents:
+      analyzer: "toc-generator"
+    approval:
+      required: false
+    outputs:
+      - "02-analysis-content-${timestamp}.md"
+
+  - name: "analysis-quality"
+    description: "Analyze quality metrics"
+    depends_on: ["research-phase-1", "research-phase-2"]
+    parallel: true
+    agents:
+      analyzer: "toc-reviewer"
+    approval:
+      required: false
+    outputs:
+      - "02-analysis-quality-${timestamp}.md"
+
+  # Tool-based stages running in parallel
+  - name: "file-processing"
+    description: "Process files using tool agents"
+    depends_on: ["analysis-content", "analysis-quality"]
+    parallel: true
+    agents:
+      processor: "file-processor"
+    approval:
+      required: false
+    outputs:
+      - "03-file-processing-${timestamp}.md"
+
+  - name: "code-execution"
+    description: "Execute code snippets"
+    depends_on: ["analysis-content", "analysis-quality"]
+    parallel: true
+    agents:
+      executor: "code-executor"
+    approval:
+      required: false
+    outputs:
+      - "03-code-execution-${timestamp}.md"
+
+  # Final stage that depends on all parallel processing
+  - name: "final-assembly"
+    description: "Assemble final results"
+    depends_on: ["file-processing", "code-execution"]
+    agents:
+      assembler: "book-reviewer"
+      validator: "title-reviewer"
+    approval:
+      required: true
+      timeout: "2m"
+    outputs:
+      - "04-final-assembly-${timestamp}.md"
+
+variables:
+  topic: "${DEMO_TOPIC:-Parallel Workflow Execution}"
+  research_scope_1: "Architecture and design patterns"
+  research_scope_2: "Performance optimization techniques"
+  analysis_depth: "comprehensive"

@@ -33,6 +33,9 @@ public class OpenAiLLMProvider extends AbstractLLMProvider {
 
     private final OpenAiChatModel model;
 
+    private final String apiKey;
+    private final String openAiBase;
+
     /**
      * Creates a new OpenAI LLM provider with the specified configuration.
      * <p>
@@ -47,12 +50,10 @@ public class OpenAiLLMProvider extends AbstractLLMProvider {
      * @param openAiBase the base URL for the OpenAI API endpoint
      */
     public OpenAiLLMProvider(String apiKey, String modelName, String openAiBase) {
-        super("openai");
-        this.model = OpenAiChatModel.builder()
-                .baseUrl(openAiBase)
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .build();
+        super(standardizeProviderName("openai"), standardizeModelName(modelName, "gpt-3.5-turbo"));
+        this.apiKey = apiKey;
+        this.openAiBase = openAiBase;
+        this.model = createOpenAiModel();
     }
 
     /**
@@ -68,12 +69,33 @@ public class OpenAiLLMProvider extends AbstractLLMProvider {
      * @param retryPolicy the retry policy to use for LLM calls
      */
     public OpenAiLLMProvider(String apiKey, String modelName, String openAiBase, RetryPolicy retryPolicy) {
-        super("openai", retryPolicy);
-        this.model = OpenAiChatModel.builder()
-                .baseUrl(openAiBase)
+        super(standardizeProviderName("openai"), standardizeModelName(modelName, "gpt-3.5-turbo"), retryPolicy);
+        this.apiKey = apiKey;
+        this.openAiBase = openAiBase;
+        this.model = createOpenAiModel();
+    }
+
+    /**
+     * Creates the OpenAI model instance using the template method pattern.
+     * <p>
+     * This method eliminates duplication in model creation logic by using
+     * the common pattern provided by AbstractLLMProvider.
+     * </p>
+     *
+     * @return configured OpenAI chat model
+     */
+    private OpenAiChatModel createOpenAiModel() {
+        // Handle null/empty baseUrl by providing a default
+        String effectiveBaseUrl = (openAiBase == null || openAiBase.trim().isEmpty())
+            ? "https://api.openai.com/v1" : openAiBase;
+
+        return createModel(
+            OpenAiChatModel::builder,
+            builder -> builder
+                .baseUrl(effectiveBaseUrl)
                 .apiKey(apiKey)
-                .modelName(modelName)
-                .build();
+                .modelName(getModelName())
+        );
     }
 
     /**
@@ -124,5 +146,77 @@ public class OpenAiLLMProvider extends AbstractLLMProvider {
                lowerMessage.contains("model overloaded") ||
                lowerMessage.contains("engine overloaded")
         );
+    }
+
+    /**
+     * Builder for creating OpenAI LLM providers with fluent configuration.
+     * <p>
+     * This builder provides a more convenient way to create OpenAI providers
+     * and eliminates constructor duplication.
+     * </p>
+     */
+    public static class Builder extends AbstractLLMProvider.Builder<OpenAiLLMProvider, Builder> {
+        private String apiKey;
+        private String openAiBase;
+
+        public Builder() {
+            super("openai");
+        }
+
+        /**
+         * Sets the OpenAI API key.
+         *
+         * @param apiKey the API key
+         * @return this builder for method chaining
+         */
+        public Builder apiKey(String apiKey) {
+            this.apiKey = apiKey;
+            return this;
+        }
+
+        /**
+         * Sets the OpenAI base URL.
+         *
+         * @param openAiBase the base URL
+         * @return this builder for method chaining
+         */
+        public Builder baseUrl(String openAiBase) {
+            this.openAiBase = openAiBase;
+            return this;
+        }
+
+        /**
+         * Creates a new builder instance.
+         *
+         * @return a new OpenAI provider builder
+         */
+        public static Builder create() {
+            return new Builder();
+        }
+
+        @Override
+        public OpenAiLLMProvider build() {
+            if (apiKey == null || apiKey.isBlank()) {
+                throw new IllegalArgumentException("API key is required for OpenAI provider");
+            }
+            if (openAiBase == null || openAiBase.isBlank()) {
+                openAiBase = "https://api.openai.com/v1/";
+            }
+
+            if (retryPolicy != null) {
+                return new OpenAiLLMProvider(apiKey, modelName, openAiBase, retryPolicy);
+            } else {
+                return new OpenAiLLMProvider(apiKey, modelName, openAiBase);
+            }
+        }
+    }
+
+    /**
+     * Creates a new builder for configuring an OpenAI provider.
+     *
+     * @return a new builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
     }
 }

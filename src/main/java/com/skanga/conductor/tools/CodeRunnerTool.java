@@ -1,6 +1,8 @@
 package com.skanga.conductor.tools;
 
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.execution.ExecutionInput;
+import com.skanga.conductor.execution.ExecutionResult;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -37,8 +39,8 @@ import java.util.stream.Collectors;
  *
  * @since 1.0.0
  * @see Tool
- * @see ToolInput
- * @see ToolResult
+ * @see ExecutionInput
+ * @see ExecutionResult
  */
 public class CodeRunnerTool implements Tool {
 
@@ -68,33 +70,33 @@ public class CodeRunnerTool implements Tool {
     }
 
     @Override
-    public String name() {
+    public String toolName() {
         return "code_runner";
     }
 
     @Override
-    public String description() {
+    public String toolDescription() {
         return "Run a shell command safely. Input: command with arguments (supports quoted strings)";
     }
 
     @Override
-    public ToolResult run(ToolInput input) {
-        ValidationResult inputValidation = validateInput(input);
+    public ExecutionResult runTool(ExecutionInput toolInput) {
+        ValidationResult inputValidation = validateInput(toolInput);
         if (!inputValidation.isValid()) {
-            return new ToolResult(false, inputValidation.getErrorMessage(), null);
+            return new ExecutionResult(false, inputValidation.getErrorMessage(), null);
         }
         try {
-            String command = input.text().trim();
+            String command = toolInput.content().trim();
             List<String> commandArgs = parseCommand(command);
             if (commandArgs.isEmpty()) {
-                return new ToolResult(false, "Invalid command format", null);
+                return new ExecutionResult(false, "Invalid command format", null);
             }
             ValidationResult commandValidation = validateCommand(commandArgs);
             if (!commandValidation.isValid()) {
-                return new ToolResult(false, commandValidation.getErrorMessage(), null);
+                return new ExecutionResult(false, commandValidation.getErrorMessage(), null);
             }
             if (!allowedCommands.isEmpty() && !allowedCommands.contains(commandArgs.get(0))) {
-                return new ToolResult(false, "Command not allowed: " + commandArgs.get(0), null);
+                return new ExecutionResult(false, "Command not allowed: " + commandArgs.get(0), null);
             }
             ProcessBuilder pb = new ProcessBuilder(commandArgs);
             pb.redirectErrorStream(true);
@@ -102,7 +104,7 @@ public class CodeRunnerTool implements Tool {
             boolean finished = p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
                 p.destroyForcibly();
-                return new ToolResult(false, "Command timed out after " + timeout.toSeconds() + " seconds", null);
+                return new ExecutionResult(false, "Command timed out after " + timeout.toSeconds() + " seconds", null);
             }
             String output;
             try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
@@ -111,9 +113,9 @@ public class CodeRunnerTool implements Tool {
             int code = p.exitValue();
             boolean success = code == 0;
             String result = "ExitCode=" + code + "\n" + output;
-            return new ToolResult(success, result, Map.of("exitCode", code, "command", commandArgs.get(0)));
+            return new ExecutionResult(success, result, Map.of("exitCode", code, "command", commandArgs.get(0)));
         } catch (Exception e) {
-            return new ToolResult(false, "Execution error: " + e.getMessage(), null);
+            return new ExecutionResult(false, "Execution error: " + e.getMessage(), null);
         }
     }
 
@@ -136,14 +138,14 @@ public class CodeRunnerTool implements Tool {
         return args;
     }
 
-    private ValidationResult validateInput(ToolInput input) {
+    private ValidationResult validateInput(ExecutionInput input) {
         if (input == null) {
             return ValidationResult.invalid("Tool input cannot be null");
         }
-        if (input.text() == null) {
+        if (input.content() == null) {
             return ValidationResult.invalid("Command cannot be null");
         }
-        String command = input.text().trim();
+        String command = input.content().trim();
         if (command.isEmpty()) {
             return ValidationResult.invalid("Command cannot be empty");
         }

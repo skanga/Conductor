@@ -15,7 +15,7 @@ package com.skanga.conductor.demo;
  * @param title the chapter title
  * @param spec the detailed specification or description for the chapter content
  * @since 1.0.0
- * @see BookWorkflow
+ * @see BookCreationWorkflow
  * @see Chapter
  */
 public record ChapterSpec(String title, String spec) {

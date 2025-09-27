@@ -1,0 +1,146 @@
+workflow:
+  name: "complex-parallel"
+  description: "Complex parallel execution with multiple dependency patterns"
+  version: "1.0"
+
+settings:
+  output_dir: "data/complex-parallel-${timestamp}"
+  max_retries: 3
+  target_words_per_chapter: 600
+
+stages:
+  # Wave 1: Single initialization stage
+  - name: "project-setup"
+    description: "Set up the project foundation"
+    agents:
+      setup: "title-generator"
+    outputs:
+      - "wave1-setup-${timestamp}.md"
+
+  # Wave 2: Three parallel stages depending on setup
+  - name: "frontend-research"
+    description: "Research frontend technologies"
+    depends_on: ["project-setup"]
+    parallel: true
+    agents:
+      researcher: "research-assistant"
+    outputs:
+      - "wave2-frontend-${timestamp}.md"
+
+  - name: "backend-research"
+    description: "Research backend technologies"
+    depends_on: ["project-setup"]
+    parallel: true
+    agents:
+      researcher: "research-assistant"
+    outputs:
+      - "wave2-backend-${timestamp}.md"
+
+  - name: "database-research"
+    description: "Research database technologies"
+    depends_on: ["project-setup"]
+    parallel: true
+    agents:
+      researcher: "research-assistant"
+    outputs:
+      - "wave2-database-${timestamp}.md"
+
+  # Wave 3: Two stages with different dependencies
+  - name: "ui-design"
+    description: "Design user interface"
+    depends_on: ["frontend-research"]  # Only depends on frontend
+    parallel: true
+    agents:
+      designer: "toc-generator"
+    outputs:
+      - "wave3-ui-design-${timestamp}.md"
+
+  - name: "api-design"
+    description: "Design API interfaces"
+    depends_on: ["backend-research", "database-research"]  # Depends on both
+    parallel: true
+    agents:
+      designer: "toc-generator"
+    outputs:
+      - "wave3-api-design-${timestamp}.md"
+
+  # Wave 4: Tool-based parallel processing
+  - name: "code-analysis"
+    description: "Analyze code patterns"
+    depends_on: ["ui-design", "api-design"]
+    parallel: true
+    agents:
+      analyzer: "code-executor"
+    outputs:
+      - "wave4-code-analysis-${timestamp}.md"
+
+  - name: "file-organization"
+    description: "Organize project files"
+    depends_on: ["ui-design", "api-design"]
+    parallel: true
+    agents:
+      organizer: "file-processor"
+    outputs:
+      - "wave4-file-org-${timestamp}.md"
+
+  - name: "quality-audit"
+    description: "Audit code quality"
+    depends_on: ["ui-design", "api-design"]
+    parallel: true
+    agents:
+      auditor: "content-auditor"
+    outputs:
+      - "wave4-quality-audit-${timestamp}.md"
+
+  # Wave 5: Integration stage
+  - name: "integration-testing"
+    description: "Test system integration"
+    depends_on: ["code-analysis", "file-organization"]  # Partial dependency
+    agents:
+      tester: "chapter-writer"
+    outputs:
+      - "wave5-integration-${timestamp}.md"
+
+  # Wave 6: Final parallel reviews
+  - name: "technical-review"
+    description: "Technical review of implementation"
+    depends_on: ["integration-testing"]
+    parallel: true
+    agents:
+      reviewer: "chapter-reviewer"
+    approval:
+      required: true
+      timeout: "3m"
+    outputs:
+      - "wave6-tech-review-${timestamp}.md"
+
+  - name: "security-review"
+    description: "Security review of implementation"
+    depends_on: ["integration-testing"]
+    parallel: true
+    agents:
+      reviewer: "book-reviewer"
+    approval:
+      required: true
+      timeout: "3m"
+    outputs:
+      - "wave6-security-review-${timestamp}.md"
+
+  # Wave 7: Final assembly
+  - name: "project-completion"
+    description: "Complete project documentation"
+    depends_on: ["technical-review", "security-review", "quality-audit"]
+    agents:
+      finalizer: "book-reviewer"
+      validator: "title-reviewer"
+    approval:
+      required: true
+      timeout: "5m"
+    outputs:
+      - "wave7-completion-${timestamp}.md"
+
+variables:
+  project_type: "${PROJECT_TYPE:-Full-Stack Web Application}"
+  technology_stack: "${TECH_STACK:-Modern JavaScript}"
+  complexity_level: "${COMPLEXITY:-Enterprise}"
+  target_audience: "${AUDIENCE:-Development Teams}"

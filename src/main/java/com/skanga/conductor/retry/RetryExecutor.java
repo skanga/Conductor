@@ -29,18 +29,18 @@ public class RetryExecutor {
 
     private static final Logger logger = LoggerFactory.getLogger(RetryExecutor.class);
 
-    private final RetryPolicy policy;
+    private final RetryPolicy retryPolicy;
     private final MetricsRegistry metricsRegistry;
     private final String operationName;
 
     /**
      * Creates a new retry executor with the specified policy.
      *
-     * @param policy the retry policy to use
+     * @param retryPolicy the retry policy to use
      * @param operationName a descriptive name for the operation (used in logging and metrics)
      */
-    public RetryExecutor(RetryPolicy policy, String operationName) {
-        this.policy = policy;
+    public RetryExecutor(RetryPolicy retryPolicy, String operationName) {
+        this.retryPolicy = retryPolicy;
         this.operationName = operationName;
         this.metricsRegistry = MetricsRegistry.getInstance();
     }
@@ -100,7 +100,7 @@ public class RetryExecutor {
      * @throws Exception if all retry attempts fail or a non-retryable exception occurs
      */
     private <T> T executeInternal(Supplier<T> operation) throws Exception {
-        RetryContext context = policy.createContext();
+        RetryContext context = retryPolicy.createContext();
         Throwable lastException = null;
 
         while (true) {
@@ -135,7 +135,7 @@ public class RetryExecutor {
             context.recordFailure(lastException);
 
             // Check if we should retry
-            if (!policy.shouldRetry(context)) {
+            if (!retryPolicy.shouldRetry(context)) {
                 recordRetryMetrics(context, false);
                 logger.warn("Operation '{}' failed after {} attempts (elapsed: {}). Final exception: {}",
                     operationName, context.getAttemptCount(), context.getElapsedTime(),
@@ -152,7 +152,7 @@ public class RetryExecutor {
             }
 
             // Calculate delay and wait
-            Duration delay = policy.getRetryDelay(context);
+            Duration delay = retryPolicy.getRetryDelay(context);
             if (!delay.isZero()) {
                 logger.debug("Operation '{}' attempt {} failed ({}), retrying in {}",
                     operationName, context.getAttemptCount(),
@@ -188,7 +188,7 @@ public class RetryExecutor {
                 Map.of(
                     "operation", operationName,
                     "success", String.valueOf(success),
-                    "policy", policy.getClass().getSimpleName()
+                    "policy", retryPolicy.getClass().getSimpleName()
                 )
             ));
 
@@ -199,7 +199,7 @@ public class RetryExecutor {
                 Map.of(
                     "operation", operationName,
                     "success", String.valueOf(success),
-                    "policy", policy.getClass().getSimpleName()
+                    "policy", retryPolicy.getClass().getSimpleName()
                 )
             ));
 
@@ -211,7 +211,7 @@ public class RetryExecutor {
                     Map.of(
                         "operation", operationName,
                         "final_success", String.valueOf(success),
-                        "policy", policy.getClass().getSimpleName()
+                        "policy", retryPolicy.getClass().getSimpleName()
                     )
                 ));
             }
@@ -222,7 +222,7 @@ public class RetryExecutor {
                 Map.of(
                     "operation", operationName,
                     "success", String.valueOf(success),
-                    "policy", policy.getClass().getSimpleName(),
+                    "policy", retryPolicy.getClass().getSimpleName(),
                     "retried", String.valueOf(context.getAttemptCount() > 1)
                 )
             ));
@@ -234,8 +234,8 @@ public class RetryExecutor {
      *
      * @return the retry policy
      */
-    public RetryPolicy getPolicy() {
-        return policy;
+    public RetryPolicy getRetryPolicy() {
+        return retryPolicy;
     }
 
     /**
@@ -261,6 +261,6 @@ public class RetryExecutor {
     @Override
     public String toString() {
         return String.format("RetryExecutor{operation='%s', policy=%s}",
-            operationName, policy);
+            operationName, retryPolicy);
     }
 }

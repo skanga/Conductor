@@ -1,6 +1,7 @@
 package com.skanga.conductor.demo;
 
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.utils.SingletonHolder;
 
 import java.time.Duration;
 import java.util.List;
@@ -40,7 +41,9 @@ import java.util.UUID;
  */
 public class DemoConfig {
 
-    private static volatile DemoConfig instance;
+    private static final SingletonHolder<DemoConfig> HOLDER =
+        SingletonHolder.of(DemoConfig::new);
+
     private final ApplicationConfig appConfig;
 
     /**
@@ -53,20 +56,26 @@ public class DemoConfig {
     /**
      * Returns the singleton instance of DemoConfig.
      * <p>
-     * Uses double-checked locking for thread-safe singleton initialization.
+     * This method uses the generic SingletonHolder pattern for optimal
+     * thread safety and performance. The instance is created only once
+     * and subsequent calls return the same instance.
      * </p>
      *
      * @return the singleton DemoConfig instance
      */
     public static DemoConfig getInstance() {
-        if (instance == null) {
-            synchronized (DemoConfig.class) {
-                if (instance == null) {
-                    instance = new DemoConfig();
-                }
-            }
-        }
-        return instance;
+        return HOLDER.get();
+    }
+
+    /**
+     * Resets the singleton instance for testing purposes.
+     * <p>
+     * This method should only be used in test scenarios where you need
+     * to reset the configuration state between tests.
+     * </p>
+     */
+    public static void resetInstance() {
+        HOLDER.reset();
     }
 
     /**
@@ -219,7 +228,7 @@ public class DemoConfig {
      */
     public List<String> getDemoToolClasses() {
         String toolsConfig = appConfig.getString("demo.tools.classes",
-            "FileReadTool,MockWebSearchTool,CodeRunnerTool,SimpleAudioTool");
+            "FileReadTool,WebSearchTool,CodeRunnerTool,TextToSpeechTool");
         return List.of(toolsConfig.split(","));
     }
 
@@ -300,14 +309,6 @@ public class DemoConfig {
             "Critique the chapter. Provide numbered points for improvement.");
     }
 
-    /**
-     * Gets whether to clean up demo data after completion.
-     *
-     * @return true if demo data should be cleaned up
-     */
-    public boolean isCleanupEnabled() {
-        return appConfig.getBoolean("demo.cleanup.enabled", false);
-    }
 
     /**
      * Gets the demo run timeout duration.
@@ -320,34 +321,44 @@ public class DemoConfig {
     }
 
     /**
-     * Gets whether demo databases should be temporary.
+     * Gets whether demo databases should be automatically cleaned up after completion.
      * <p>
-     * Temporary databases are automatically cleaned up after demo completion,
-     * while persistent databases are kept for later analysis.
+     * When enabled (default), each agentic run gets its own isolated database
+     * that is automatically removed after the run completes. This prevents
+     * database file accumulation and ensures clean state for each run.
      * </p>
      *
-     * @return true if demo databases should be temporary
+     * @return true if demo databases should be automatically cleaned up
      */
-    public boolean isDemoTemporary() {
-        return appConfig.getBoolean("demo.database.temporary", true);
+    public boolean isAutoCleanupEnabled() {
+        return appConfig.getBoolean("demo.database.auto.cleanup", true);
     }
 
     /**
-     * Gets the directory for temporary demo databases.
+     * Gets whether demo databases should be preserved for debugging.
+     * <p>
+     * When enabled, databases are kept after completion for inspection and
+     * analysis, even if auto-cleanup is enabled. This is useful for development
+     * and troubleshooting scenarios.
+     * </p>
      *
-     * @return directory path for temporary database files
+     * @return true if demo databases should be preserved for debugging
      */
-    public String getDemoTempDatabaseDir() {
-        return appConfig.getString("demo.database.temp.dir", "./data/temp/demo-databases");
+    public boolean isPreserveForDebug() {
+        return appConfig.getBoolean("demo.database.preserve.for.debug", false);
     }
 
     /**
-     * Gets the directory for persistent demo databases.
+     * Gets the base directory for demo databases.
+     * <p>
+     * All demo databases will be created in subdirectories under this path,
+     * with each agentic run getting its own isolated directory.
+     * </p>
      *
-     * @return directory path for persistent database files
+     * @return directory path for demo database files
      */
-    public String getDemoPersistentDatabaseDir() {
-        return appConfig.getString("demo.database.persistent.dir", "./data/persistent/demo-databases");
+    public String getDemoDatabaseBaseDir() {
+        return appConfig.getString("demo.database.base.dir", "./data/demo-databases");
     }
 
     /**
@@ -363,14 +374,6 @@ public class DemoConfig {
         return appConfig.getInt("demo.database.max.age.hours", 24);
     }
 
-    /**
-     * Gets whether automatic database cleanup is enabled.
-     *
-     * @return true if old demo databases should be automatically cleaned up
-     */
-    public boolean isAutoCleanupEnabled() {
-        return appConfig.getBoolean("demo.database.auto.cleanup.enabled", true);
-    }
 
     public ApplicationConfig getAppConfig() {
         return appConfig;

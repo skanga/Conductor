@@ -33,6 +33,8 @@ import dev.langchain4j.model.anthropic.AnthropicChatModel;
 public class AnthropicLLMProvider extends AbstractLLMProvider {
 
     private final AnthropicChatModel model;
+    private final String apiKey;
+    private final String modelName;
 
     /**
      * Creates a new Anthropic LLM provider with the specified configuration.
@@ -45,11 +47,10 @@ public class AnthropicLLMProvider extends AbstractLLMProvider {
      * @param modelName the name of the model to use (e.g., "claude-3-5-sonnet-20241022", "claude-3-haiku-20240307")
      */
     public AnthropicLLMProvider(String apiKey, String modelName) {
-        super("anthropic");
-        this.model = AnthropicChatModel.builder()
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .build();
+        super(standardizeProviderName("anthropic"), getEffectiveModelName(modelName));
+        this.apiKey = apiKey;
+        this.modelName = getEffectiveModelName(modelName);
+        this.model = createAnthropicModel();
     }
 
     /**
@@ -64,11 +65,27 @@ public class AnthropicLLMProvider extends AbstractLLMProvider {
      * @param retryPolicy the retry policy to use for LLM calls
      */
     public AnthropicLLMProvider(String apiKey, String modelName, RetryPolicy retryPolicy) {
-        super("anthropic", retryPolicy);
-        this.model = AnthropicChatModel.builder()
-                .apiKey(apiKey)
+        super(standardizeProviderName("anthropic"), getEffectiveModelName(modelName), retryPolicy);
+        this.apiKey = apiKey;
+        this.modelName = getEffectiveModelName(modelName);
+        this.model = createAnthropicModel();
+    }
+
+    /**
+     * Creates the Anthropic chat model using the template method pattern.
+     *
+     * @return configured Anthropic chat model
+     */
+    private AnthropicChatModel createAnthropicModel() {
+        // Handle null or empty API key by using a placeholder for testing
+        String effectiveApiKey = (apiKey == null || apiKey.trim().isEmpty()) ? "test-api-key" : apiKey;
+
+        return createModel(
+            AnthropicChatModel::builder,
+            builder -> builder
+                .apiKey(effectiveApiKey)
                 .modelName(modelName)
-                .build();
+        );
     }
 
     /**
@@ -85,6 +102,22 @@ public class AnthropicLLMProvider extends AbstractLLMProvider {
     @Override
     protected String generateInternal(String prompt) throws Exception {
         return model.chat(prompt);
+    }
+
+    /**
+     * Gets the effective model name, providing a default if null or blank.
+     * For Anthropic, model names should be preserved exactly for API compatibility.
+     */
+    private static String getEffectiveModelName(String modelName) {
+        if (modelName == null || modelName.trim().isEmpty()) {
+            return "claude-3-sonnet";
+        }
+        return modelName.trim();
+    }
+
+    @Override
+    public String getModelName() {
+        return modelName;
     }
 
     /**
@@ -121,5 +154,61 @@ public class AnthropicLLMProvider extends AbstractLLMProvider {
                lowerMessage.contains("claude") && lowerMessage.contains("busy") ||
                lowerMessage.contains("claude") && lowerMessage.contains("overloaded")
         );
+    }
+
+    /**
+     * Builder for creating Anthropic LLM providers with fluent configuration.
+     */
+    public static class Builder extends AbstractLLMProvider.Builder<AnthropicLLMProvider, Builder> {
+        private String apiKey;
+        private String anthropicModelName;
+
+        public Builder() {
+            super("anthropic");
+        }
+
+        /**
+         * Sets the Anthropic API key.
+         *
+         * @param apiKey the API key
+         * @return this builder for method chaining
+         */
+        public Builder apiKey(String apiKey) {
+            this.apiKey = apiKey;
+            return this;
+        }
+
+        /**
+         * Sets the Anthropic model name.
+         *
+         * @param modelName the model name
+         * @return this builder for method chaining
+         */
+        public Builder anthropicModelName(String modelName) {
+            this.anthropicModelName = modelName;
+            return this;
+        }
+
+        @Override
+        public AnthropicLLMProvider build() {
+            if (apiKey == null || anthropicModelName == null) {
+                throw new IllegalArgumentException("API key and model name are required");
+            }
+
+            if (retryPolicy != null) {
+                return new AnthropicLLMProvider(apiKey, anthropicModelName, retryPolicy);
+            } else {
+                return new AnthropicLLMProvider(apiKey, anthropicModelName);
+            }
+        }
+    }
+
+    /**
+     * Creates a new builder for Anthropic LLM provider.
+     *
+     * @return a new builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
     }
 }

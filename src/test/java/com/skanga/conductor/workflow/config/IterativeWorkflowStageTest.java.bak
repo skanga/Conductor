@@ -1,0 +1,570 @@
+package com.skanga.conductor.workflow.config;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("IterativeWorkflowStage Tests")
+class IterativeWorkflowStageTest {
+
+    private IterativeWorkflowStage stage;
+    private Map<String, Object> workflowContext;
+
+    @BeforeEach
+    void setUp() {
+        stage = new IterativeWorkflowStage();
+        stage.setName("test-stage");
+        stage.setAgent("test-agent");
+
+        workflowContext = new HashMap<>();
+        workflowContext.put("book", Map.of(
+            "title", "Test Book",
+            "chapters", Arrays.asList("Chapter 1", "Chapter 2", "Chapter 3"),
+            "chapter_count", 3
+        ));
+    }
+
+    @Test
+    @DisplayName("Should create data-driven iteration state")
+    void testDataDrivenIterationState() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("book.chapters");
+        config.setVariable("chapter");
+        stage.setIteration(config);
+
+        // When
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // Then
+        assertNotNull(state);
+        assertEquals("chapter", state.getIterationVariable());
+        assertEquals(3, state.getTotalIterations());
+        assertTrue(state.hasNext());
+    }
+
+    @Test
+    @DisplayName("Should create count-based iteration state")
+    void testCountBasedIterationState() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.COUNT_BASED);
+        config.setCount("5");
+        config.setStart(1);
+        config.setVariable("counter");
+        stage.setIteration(config);
+
+        // When
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // Then
+        assertNotNull(state);
+        assertEquals("counter", state.getIterationVariable());
+        assertEquals(5, state.getTotalIterations());
+        assertTrue(state.hasNext());
+    }
+
+    @Test
+    @DisplayName("Should create count-based iteration with variable reference")
+    void testCountBasedWithVariableReference() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.COUNT_BASED);
+        config.setCount("${book.chapter_count}");
+        config.setStart(0);
+        config.setVariable("index");
+        stage.setIteration(config);
+
+        // When
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // Then
+        assertNotNull(state);
+        assertEquals(3, state.getTotalIterations());
+        assertEquals(0, state.getCurrentIndex());
+    }
+
+    @Test
+    @DisplayName("Should create conditional iteration state")
+    void testConditionalIterationState() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.CONDITIONAL);
+        config.setCondition("${remaining} > 0");
+        config.setVariable("item");
+        config.setMaxIterations(10);
+        stage.setIteration(config);
+
+        // When
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // Then
+        assertNotNull(state);
+        assertEquals("item", state.getIterationVariable());
+        assertEquals(0, state.getTotalIterations()); // Empty for conditional
+    }
+
+    @Test
+    @DisplayName("Should iterate through data-driven items")
+    void testDataDrivenIteration() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("book.chapters");
+        config.setVariable("chapter");
+        stage.setIteration(config);
+
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // When & Then
+        List<Object> items = new ArrayList<>();
+        while (state.hasNext()) {
+            Object item = state.getNext();
+            items.add(item);
+        }
+
+        assertEquals(3, items.size());
+        assertEquals("Chapter 1", items.get(0));
+        assertEquals("Chapter 2", items.get(1));
+        assertEquals("Chapter 3", items.get(2));
+    }
+
+    @Test
+    @DisplayName("Should iterate through count-based sequence")
+    void testCountBasedIteration() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.COUNT_BASED);
+        config.setCount("3");
+        config.setStart(10);
+        config.setVariable("number");
+        stage.setIteration(config);
+
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // When & Then
+        List<Object> items = new ArrayList<>();
+        while (state.hasNext()) {
+            Object item = state.getNext();
+            items.add(item);
+        }
+
+        assertEquals(3, items.size());
+        assertEquals(10, items.get(0));
+        assertEquals(11, items.get(1));
+        assertEquals(12, items.get(2));
+    }
+
+    @Test
+    @DisplayName("Should update context with current iteration item")
+    void testContextUpdate() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("book.chapters");
+        config.setVariable("current_chapter");
+        stage.setIteration(config);
+
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // When
+        Object firstItem = state.getNext();
+        Map<String, Object> context = state.getCurrentContext();
+
+        // Then
+        assertEquals("Chapter 1", firstItem);
+        assertEquals("Chapter 1", context.get("current_chapter"));
+        assertEquals(1, state.getCurrentIndex());
+    }
+
+    @Test
+    @DisplayName("Should handle JSON path source")
+    void testJsonPathSource() {
+        // Given
+        Map<String, Object> contextWithJsonPath = new HashMap<>();
+        contextWithJsonPath.put("book", Map.of(
+            "metadata", Map.of(
+                "chapters", Arrays.asList("Intro", "Body", "Conclusion")
+            )
+        ));
+
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("$.book.metadata.chapters");
+        config.setVariable("chapter");
+        stage.setIteration(config);
+
+        // When
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(contextWithJsonPath);
+
+        // Then
+        assertEquals(3, state.getTotalIterations());
+        assertEquals("Intro", state.getNext());
+    }
+
+    @Test
+    @DisplayName("Should handle single item source")
+    void testSingleItemSource() {
+        // Given
+        workflowContext.put("single_item", "Just one thing");
+
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("single_item");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        // When
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // Then
+        assertEquals(1, state.getTotalIterations());
+        assertEquals("Just one thing", state.getNext());
+    }
+
+    @Test
+    @DisplayName("Should handle empty source")
+    void testEmptySource() {
+        // Given
+        workflowContext.put("empty_list", new ArrayList<>());
+
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("empty_list");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        // When
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // Then
+        assertEquals(0, state.getTotalIterations());
+        assertFalse(state.hasNext());
+    }
+
+    @Test
+    @DisplayName("Should throw exception for invalid source")
+    void testInvalidSource() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("nonexistent.path");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        // When & Then
+        assertThrows(IllegalArgumentException.class, () -> {
+            stage.createIterationState(workflowContext);
+        });
+    }
+
+    @Test
+    @DisplayName("Should throw exception for invalid count expression")
+    void testInvalidCountExpression() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.COUNT_BASED);
+        config.setCount("${nonexistent.count}");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        // When & Then
+        assertThrows(IllegalArgumentException.class, () -> {
+            stage.createIterationState(workflowContext);
+        });
+    }
+
+    @Test
+    @DisplayName("Should reset iteration state")
+    void testIterationReset() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.COUNT_BASED);
+        config.setCount("3");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // When
+        state.getNext(); // Advance to index 1
+        state.getNext(); // Advance to index 2
+        assertEquals(2, state.getCurrentIndex());
+
+        state.reset();
+
+        // Then
+        assertEquals(0, state.getCurrentIndex());
+        assertTrue(state.hasNext());
+    }
+
+    @Test
+    @DisplayName("Should update variables in iteration state")
+    void testUpdateVariables() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.CONDITIONAL);
+        config.setCondition("${count} > 0");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // When
+        Map<String, Object> updates = Map.of("count", 5, "status", "updated");
+        state.updateVariables(updates);
+
+        // Then
+        Map<String, Object> context = state.getCurrentContext();
+        assertEquals(5, context.get("count"));
+        assertEquals("updated", context.get("status"));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when no more iterations available")
+    void testNoMoreIterations() {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.COUNT_BASED);
+        config.setCount("1");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        // When
+        state.getNext(); // Consume the only iteration
+
+        // Then
+        assertFalse(state.hasNext());
+        assertThrows(NoSuchElementException.class, () -> state.getNext());
+    }
+
+    @Test
+    @DisplayName("Should create successful iteration result")
+    void testSuccessfulIterationResult() {
+        // When
+        Map<String, Object> result = Map.of("output", "success");
+        IterativeWorkflowStage.IterationResult iterResult =
+            IterativeWorkflowStage.IterationResult.success(0, "item1", result, 1000L);
+
+        // Then
+        assertTrue(iterResult.isSuccessful());
+        assertEquals(0, iterResult.getIndex());
+        assertEquals("item1", iterResult.getIterationItem());
+        assertEquals("success", iterResult.getResult().get("output"));
+        assertEquals(1000L, iterResult.getExecutionTimeMs());
+        assertNull(iterResult.getErrorMessage());
+    }
+
+    @Test
+    @DisplayName("Should create failed iteration result")
+    void testFailedIterationResult() {
+        // When
+        IterativeWorkflowStage.IterationResult iterResult =
+            IterativeWorkflowStage.IterationResult.failure(1, "item2", "Error occurred", 500L);
+
+        // Then
+        assertFalse(iterResult.isSuccessful());
+        assertEquals(1, iterResult.getIndex());
+        assertEquals("item2", iterResult.getIterationItem());
+        assertEquals("Error occurred", iterResult.getErrorMessage());
+        assertEquals(500L, iterResult.getExecutionTimeMs());
+        assertTrue(iterResult.getResult().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Should create iterative stage result")
+    void testIterativeStageResult() {
+        // Given
+        List<IterativeWorkflowStage.IterationResult> iterations = Arrays.asList(
+            IterativeWorkflowStage.IterationResult.success(0, "item1", Map.of("result", "A"), 1000L),
+            IterativeWorkflowStage.IterationResult.success(1, "item2", Map.of("result", "B"), 1200L),
+            IterativeWorkflowStage.IterationResult.failure(2, "item3", "Failed", 800L)
+        );
+
+        // When
+        IterativeWorkflowStage.IterativeStageResult stageResult =
+            new IterativeWorkflowStage.IterativeStageResult("test-stage", iterations);
+
+        // Then
+        assertEquals("test-stage", stageResult.getStageName());
+        assertFalse(stageResult.isAllSuccessful());
+        assertEquals(3000L, stageResult.getTotalExecutionTimeMs());
+        assertEquals(3, stageResult.getIterationResults().size());
+
+        Map<String, Object> aggregated = stageResult.getAggregatedOutputs();
+        assertEquals(2, aggregated.get("count")); // Successful iterations
+        assertEquals(2, aggregated.get("successful_count"));
+        assertEquals(1, aggregated.get("failed_count"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> iterationResults = (List<Map<String, Object>>) aggregated.get("iterations");
+        assertEquals(2, iterationResults.size());
+    }
+
+    @Test
+    @DisplayName("Should validate iterative stage configuration")
+    void testValidation() {
+        // Test valid configuration
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("test.data");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        assertDoesNotThrow(() -> stage.validate());
+
+        // Test conditional without max iterations
+        IterationConfig conditionalConfig = new IterationConfig();
+        conditionalConfig.setType(IterationConfig.IterationType.CONDITIONAL);
+        conditionalConfig.setCondition("${count} > 0");
+        conditionalConfig.setVariable("item");
+        conditionalConfig.setMaxIterations(null);
+        stage.setIteration(conditionalConfig);
+
+        assertThrows(IllegalArgumentException.class, () -> stage.validate());
+
+        // Test iteration timeout too short
+        conditionalConfig.setMaxIterations(10);
+        conditionalConfig.setIterationTimeout(500L); // Less than 1 second
+        stage.setIteration(conditionalConfig);
+
+        assertThrows(IllegalArgumentException.class, () -> stage.validate());
+    }
+
+    @Test
+    @DisplayName("Should determine parallel execution capability")
+    void testCanExecuteInParallel() {
+        // Setup iterative stage
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setSource("test.data");
+        config.setVariable("item");
+        config.setParallel(true);
+        stage.setIteration(config);
+
+        // Should be able to execute in parallel
+        assertTrue(stage.canExecuteInParallel());
+
+        // Conditional iterations cannot be parallel
+        config.setType(IterationConfig.IterationType.CONDITIONAL);
+        config.setCondition("${count} > 0");
+        config.setMaxIterations(10);
+        assertFalse(stage.canExecuteInParallel());
+
+        // With per-item approval, cannot be parallel
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        ApprovalConfig approval = new ApprovalConfig();
+        approval.setRequired(true);
+        approval.setPerItem(true);
+        stage.setApproval(approval);
+        assertFalse(stage.canExecuteInParallel());
+    }
+
+    @Test
+    @DisplayName("Should get iteration timeout")
+    void testGetIterationTimeout() {
+        // Without iteration config
+        stage.setIteration(null);
+        assertEquals(300000L, stage.getIterationTimeoutMs()); // Default 5 minutes
+
+        // With custom timeout
+        IterationConfig config = new IterationConfig();
+        config.setIterationTimeout(120000L); // 2 minutes
+        stage.setIteration(config);
+        assertEquals(120000L, stage.getIterationTimeoutMs());
+    }
+
+    @Test
+    @DisplayName("Should provide meaningful toString")
+    void testToString() {
+        // Non-iterative stage
+        stage.setIteration(null);
+        String nonIterativeStr = stage.toString();
+        assertTrue(nonIterativeStr.contains("WorkflowStage"));
+        assertTrue(nonIterativeStr.contains("test-stage"));
+
+        // Iterative stage
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.DATA_DRIVEN);
+        config.setParallel(true);
+        config.setMaxConcurrent(6);
+        stage.setIteration(config);
+
+        String iterativeStr = stage.toString();
+        assertTrue(iterativeStr.contains("IterativeWorkflowStage"));
+        assertTrue(iterativeStr.contains("DATA_DRIVEN"));
+        assertTrue(iterativeStr.contains("true"));
+        assertTrue(iterativeStr.contains("6"));
+    }
+
+    @Test
+    @DisplayName("Should throw exception for non-iterative stage")
+    void testNonIterativeStageException() {
+        // Given
+        stage.setIteration(null); // Non-iterative
+
+        // When & Then
+        assertThrows(IllegalStateException.class, () -> {
+            stage.createIterationState(workflowContext);
+        });
+    }
+
+    @Test
+    @DisplayName("Should handle concurrent access to iteration state")
+    void testConcurrentIterationState() throws InterruptedException {
+        // Given
+        IterationConfig config = new IterationConfig();
+        config.setType(IterationConfig.IterationType.COUNT_BASED);
+        config.setCount("10");
+        config.setVariable("item");
+        stage.setIteration(config);
+
+        IterativeWorkflowStage.IterationState state = stage.createIterationState(workflowContext);
+
+        int threadCount = 5;
+        Thread[] threads = new Thread[threadCount];
+        List<Object>[] results = new List[threadCount];
+        Exception[] exceptions = new Exception[threadCount];
+
+        // When
+        for (int i = 0; i < threadCount; i++) {
+            final int index = i;
+            results[index] = Collections.synchronizedList(new ArrayList<>());
+            threads[i] = new Thread(() -> {
+                try {
+                    // Each thread tries to get items from the shared state
+                    for (int j = 0; j < 3 && state.hasNext(); j++) {
+                        Object item = state.getNext();
+                        results[index].add(item);
+                    }
+                } catch (Exception e) {
+                    exceptions[index] = e;
+                }
+            });
+            threads[i].start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        // Then - verify no exceptions and all items were consumed
+        for (int i = 0; i < threadCount; i++) {
+            assertNull(exceptions[i], "Thread " + i + " should not have thrown an exception");
+        }
+
+        // Count total items consumed
+        int totalConsumed = 0;
+        for (List<Object> result : results) {
+            totalConsumed += result.size();
+        }
+        assertEquals(10, totalConsumed); // All items should be consumed exactly once
+    }
+}

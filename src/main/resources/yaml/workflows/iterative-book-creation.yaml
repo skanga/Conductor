@@ -1,0 +1,73 @@
+metadata:
+  name: iterative-book-creation
+  description: "Enhanced book creation workflow with iterative chapter generation"
+  version: "2.0"
+
+settings:
+  output_dir: "data/iterative-books/${timestamp}"
+  target_words_per_chapter: 1500
+  max_words_per_chapter: 2000
+
+variables:
+  book_topic: "${topic:-Cloud-Native Architecture Patterns}"
+  target_audience: "professionals"
+  author_name: "${author:-Technical Writer}"
+  chapter_count: 3
+
+stages:
+  - name: "title-generation"
+    description: "Generate compelling book title and subtitle"
+    agents:
+      primary: "book-title-writer"
+      reviewer: "editorial-content-expert"
+    approval:
+      required: true
+      timeout: "30s"
+      auto_approve: true
+    outputs:
+      - "${current_timestamp}-title.md"
+
+  - name: "toc-generation"
+    description: "Create detailed table of contents with chapter specifications"
+    depends_on: ["title-generation"]
+    agents:
+      primary: "toc-specialist"
+      reviewer: "educational-content-expert"
+    approval:
+      required: true
+      timeout: "30s"
+      auto_approve: true
+    outputs:
+      - "${current_timestamp}-toc.md"
+
+  - name: "chapter-generation"
+    description: "Generate all book chapters iteratively"
+    depends_on: ["toc-generation"]
+    iteration:
+      type: "data_driven"
+      source: "toc_generation.chapters"
+      variable: "chapter_spec"
+      parallel: true
+      max_concurrent: 2
+      error_strategy: "continue"
+      iteration_timeout: 300000  # 5 minutes per chapter
+    agents:
+      primary: "chapter-writer"
+      reviewer: "technical-content-expert"
+    approval:
+      required: false
+      per_item: false
+    outputs:
+      - "${current_timestamp}-chapter-${chapter_spec.number}.md"
+
+  - name: "final-review"
+    description: "Review complete book and provide final assessment"
+    depends_on: ["chapter-generation"]
+    agents:
+      primary: "book-reviewer"
+    approval:
+      required: true
+      timeout: "60s"
+      auto_approve: true
+    outputs:
+      - "${current_timestamp}-complete-book.md"

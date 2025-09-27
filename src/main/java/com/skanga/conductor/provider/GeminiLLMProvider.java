@@ -38,6 +38,8 @@ import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
  */
 public class GeminiLLMProvider extends AbstractLLMProvider {
     private final GoogleAiGeminiChatModel model;
+    private final String apiKey;
+    private final String modelName;
 
     /**
      * Creates a new Gemini LLM provider with the specified configuration.
@@ -50,11 +52,10 @@ public class GeminiLLMProvider extends AbstractLLMProvider {
      * @param modelName the name of the model to use (e.g., "gemini-pro", "gemini-pro-vision")
      */
     public GeminiLLMProvider(String apiKey, String modelName) {
-        super("gemini");
-        this.model = GoogleAiGeminiChatModel.builder()
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .build();
+        super(standardizeProviderName("gemini"), standardizeModelName(modelName, "gemini-pro"));
+        this.apiKey = apiKey;
+        this.modelName = modelName;
+        this.model = createGeminiModel();
     }
 
     /**
@@ -69,11 +70,24 @@ public class GeminiLLMProvider extends AbstractLLMProvider {
      * @param retryPolicy the retry policy to use for LLM calls
      */
     public GeminiLLMProvider(String apiKey, String modelName, RetryPolicy retryPolicy) {
-        super("gemini", retryPolicy);
-        this.model = GoogleAiGeminiChatModel.builder()
+        super(standardizeProviderName("gemini"), standardizeModelName(modelName, "gemini-pro"), retryPolicy);
+        this.apiKey = apiKey;
+        this.modelName = modelName;
+        this.model = createGeminiModel();
+    }
+
+    /**
+     * Creates the Google AI Gemini chat model using the template method pattern.
+     *
+     * @return configured Google AI Gemini chat model
+     */
+    private GoogleAiGeminiChatModel createGeminiModel() {
+        return createModel(
+            GoogleAiGeminiChatModel::builder,
+            builder -> builder
                 .apiKey(apiKey)
                 .modelName(modelName)
-                .build();
+        );
     }
 
     /**
@@ -128,5 +142,61 @@ public class GeminiLLMProvider extends AbstractLLMProvider {
                lowerMessage.contains("gemini") && lowerMessage.contains("overloaded") ||
                lowerMessage.contains("ai platform") && lowerMessage.contains("error")
         );
+    }
+
+    /**
+     * Builder for creating Google Gemini LLM providers with fluent configuration.
+     */
+    public static class Builder extends AbstractLLMProvider.Builder<GeminiLLMProvider, Builder> {
+        private String apiKey;
+        private String geminiModelName;
+
+        public Builder() {
+            super("gemini");
+        }
+
+        /**
+         * Sets the Google AI API key.
+         *
+         * @param apiKey the API key
+         * @return this builder for method chaining
+         */
+        public Builder apiKey(String apiKey) {
+            this.apiKey = apiKey;
+            return this;
+        }
+
+        /**
+         * Sets the Gemini model name.
+         *
+         * @param modelName the model name
+         * @return this builder for method chaining
+         */
+        public Builder geminiModelName(String modelName) {
+            this.geminiModelName = modelName;
+            return this;
+        }
+
+        @Override
+        public GeminiLLMProvider build() {
+            if (apiKey == null || geminiModelName == null) {
+                throw new IllegalArgumentException("API key and model name are required");
+            }
+
+            if (retryPolicy != null) {
+                return new GeminiLLMProvider(apiKey, geminiModelName, retryPolicy);
+            } else {
+                return new GeminiLLMProvider(apiKey, geminiModelName);
+            }
+        }
+    }
+
+    /**
+     * Creates a new builder for Gemini LLM provider.
+     *
+     * @return a new builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
     }
 }

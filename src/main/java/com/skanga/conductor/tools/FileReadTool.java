@@ -1,11 +1,16 @@
 package com.skanga.conductor.tools;
 
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.execution.ExecutionInput;
+import com.skanga.conductor.execution.ExecutionResult;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.Normalizer;
 import java.util.regex.Pattern;
 
 /**
@@ -44,9 +49,35 @@ public class FileReadTool implements Tool {
     private final boolean allowSymlinks;
     private final long maxFileSize;
 
-    // Pattern to detect suspicious path components
+    // Comprehensive patterns to detect various path traversal and injection attacks
     private static final Pattern SUSPICIOUS_PATTERNS = Pattern.compile(
-            ".*(\\.{2}[/\\\\]|[/\\\\]\\.{2}|^\\.{2}$|^[/\\\\]|.*[<>:\"|?*].*)"
+            ".*(" +
+            // Standard path traversal patterns
+            "\\.{2}[/\\\\]|[/\\\\]\\.{2}|^\\.{2}$|^[/\\\\]|" +
+            // Windows drive access patterns
+            "^[A-Za-z]:|.*[A-Za-z]:[/\\\\]|" +
+            // UNC path patterns (\\server\share)
+            "^\\\\\\\\|.*\\\\\\\\.*\\\\|" +
+            // URL/URI schemes that could lead to remote access
+            "^[a-zA-Z][a-zA-Z0-9+.-]*:|.*://|" +
+            // Special file/device names (Windows)
+            "(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\.|$)|" +
+            // Forbidden characters in file paths
+            ".*[<>:\"|?*\\x00-\\x1f]|" +
+            // Expression injection patterns
+            "\\$\\{|#\\{|%\\{|\\$\\(|`|" +
+            // Double encoding attacks
+            "%2[eE]%2[eE]|%5[cC]|%2[fF]|" +
+            // Alternative path separators and encoding
+            "\\x2e\\x2e|\\u002e\\u002e|\\\\x2e|\\\\u002e|" +
+            // Control characters and Unicode attacks
+            "[\\x00-\\x1f\\x7f-\\x9f]|\\\\[nrtbfav0]|" +
+            // Shell metacharacters
+            "[;&|`$(){}\\[\\]]|" +
+            // Potential command injection
+            "\\|[^|]|&&|;[^;]" +
+            ").*",
+            Pattern.CASE_INSENSITIVE
     );
 
     /**
@@ -136,30 +167,30 @@ public class FileReadTool implements Tool {
     }
 
     @Override
-    public String name() {
+    public String toolName() {
         return "file_read";
     }
 
     @Override
-    public String description() {
+    public String toolDescription() {
         return "Securely read a text file under the configured base directory. Input: relative path";
     }
 
     @Override
-    public ToolResult run(ToolInput input) {
+    public ExecutionResult runTool(ExecutionInput input) {
         // Comprehensive input validation
         ValidationResult inputValidation = validateInput(input);
         if (!inputValidation.isValid()) {
-            return new ToolResult(false, inputValidation.getErrorMessage(), null);
+            return new ExecutionResult(false, inputValidation.getErrorMessage(), null);
         }
 
         try {
-            String relativePath = input.text().trim();
+            String relativePath = input.content().trim();
 
             // Security validation
             SecurityValidationResult validation = validatePath(relativePath);
             if (!validation.isValid()) {
-                return new ToolResult(false, validation.getErrorMessage(), null);
+                return new ExecutionResult(false, validation.getErrorMessage(), null);
             }
 
             Path candidate = baseDir.resolve(relativePath);
@@ -167,36 +198,36 @@ public class FileReadTool implements Tool {
             // Additional security checks after resolution
             SecurityValidationResult postResolutionValidation = validateResolvedPath(candidate);
             if (!postResolutionValidation.isValid()) {
-                return new ToolResult(false, postResolutionValidation.getErrorMessage(), null);
+                return new ExecutionResult(false, postResolutionValidation.getErrorMessage(), null);
             }
 
             // File existence and type checks
             if (!Files.exists(candidate)) {
-                return new ToolResult(false, "File not found: " + relativePath, null);
+                return new ExecutionResult(false, "File not found: " + relativePath, null);
             }
 
             if (Files.isDirectory(candidate)) {
-                return new ToolResult(false, "Path is a directory, not a file: " + relativePath, null);
+                return new ExecutionResult(false, "Path is a directory, not a file: " + relativePath, null);
             }
 
             // Check file size
             long fileSize = Files.size(candidate);
             if (fileSize > maxFileSize) {
-                return new ToolResult(false,
+                return new ExecutionResult(false,
                         String.format("File too large: %d bytes (max: %d bytes)", fileSize, maxFileSize),
                         null);
             }
 
-            // Read and return file content
-            String content = Files.readString(candidate);
-            return new ToolResult(true, content, null);
+            // Read and return file content with memory-efficient approach
+            String content = readFileContent(candidate, fileSize);
+            return new ExecutionResult(true, content, null);
 
         } catch (IOException e) {
-            return new ToolResult(false, "Error reading file: " + e.getMessage(), null);
+            return new ExecutionResult(false, "Error reading file: " + e.getMessage(), null);
         } catch (SecurityException e) {
-            return new ToolResult(false, "Security error: " + e.getMessage(), null);
+            return new ExecutionResult(false, "Security error: " + e.getMessage(), null);
         } catch (Exception e) {
-            return new ToolResult(false, "Unexpected error: " + e.getMessage(), null);
+            return new ExecutionResult(false, "Unexpected error: " + e.getMessage(), null);
         }
     }
 
@@ -206,16 +237,16 @@ public class FileReadTool implements Tool {
      * @param input the tool input to validate
      * @return validation result indicating success or specific error
      */
-    private ValidationResult validateInput(ToolInput input) {
+    private ValidationResult validateInput(ExecutionInput input) {
         if (input == null) {
             return ValidationResult.invalid("Tool input cannot be null");
         }
 
-        if (input.text() == null) {
+        if (input.content() == null) {
             return ValidationResult.invalid("File path cannot be null");
         }
 
-        String path = input.text().trim();
+        String path = input.content().trim();
         if (path.isEmpty()) {
             return ValidationResult.invalid("File path cannot be empty");
         }
@@ -253,6 +284,12 @@ public class FileReadTool implements Tool {
         // Check for suspicious patterns
         if (SUSPICIOUS_PATTERNS.matcher(path).matches()) {
             return SecurityValidationResult.invalid("Path contains suspicious patterns: " + path);
+        }
+
+        // Additional specific validations
+        SecurityValidationResult specificValidation = validateSpecificAttacks(path);
+        if (!specificValidation.isValid()) {
+            return specificValidation;
         }
 
         // Check for absolute paths
@@ -327,6 +364,236 @@ public class FileReadTool implements Tool {
         }
 
         return SecurityValidationResult.valid();
+    }
+
+    /**
+     * Validates against specific attack patterns with detailed categorization.
+     */
+    private SecurityValidationResult validateSpecificAttacks(String path) {
+        // Unicode normalization attacks
+        String normalizedPath = Normalizer.normalize(path, Normalizer.Form.NFC);
+        if (!normalizedPath.equals(path)) {
+            if (SUSPICIOUS_PATTERNS.matcher(normalizedPath).matches()) {
+                return SecurityValidationResult.invalid("Path contains Unicode normalization attack: " + path);
+            }
+        }
+
+        // Double-dot encoding variations
+        if (containsEncodedTraversal(path)) {
+            return SecurityValidationResult.invalid("Path contains encoded traversal patterns: " + path);
+        }
+
+        // Windows device name attacks
+        if (containsWindowsDeviceName(path)) {
+            return SecurityValidationResult.invalid("Path references Windows device name: " + path);
+        }
+
+        // Long path attacks (Windows MAX_PATH limit bypass attempts)
+        if (path.length() > 32767) { // Windows extended path limit
+            return SecurityValidationResult.invalid("Path exceeds maximum length limit: " + path.length());
+        }
+
+        // Deep nesting attacks (zip bombs, directory bombs)
+        int separatorCount = (int) path.chars().filter(c -> c == '/' || c == '\\').count();
+        if (separatorCount > 100) { // Reasonable depth limit
+            return SecurityValidationResult.invalid("Path nesting too deep: " + separatorCount + " levels");
+        }
+
+        // Zero-width characters and invisible characters
+        if (containsInvisibleCharacters(path)) {
+            return SecurityValidationResult.invalid("Path contains invisible or zero-width characters: " + path);
+        }
+
+        // Mixed separator attacks
+        if (containsMixedSeparators(path)) {
+            return SecurityValidationResult.invalid("Path contains mixed directory separators: " + path);
+        }
+
+        // Template injection patterns
+        if (containsTemplateInjection(path)) {
+            return SecurityValidationResult.invalid("Path contains template injection patterns: " + path);
+        }
+
+        // Case variation attacks (for case-insensitive filesystems)
+        if (containsCaseVariationAttack(path)) {
+            return SecurityValidationResult.invalid("Path contains potential case variation attack: " + path);
+        }
+
+        return SecurityValidationResult.valid();
+    }
+
+    /**
+     * Checks for various encoded traversal patterns.
+     */
+    private boolean containsEncodedTraversal(String path) {
+        String lowerPath = path.toLowerCase();
+        return lowerPath.contains("%2e%2e") ||          // URL encoded ..
+               lowerPath.contains("%252e%252e") ||      // Double URL encoded ..
+               lowerPath.contains("\\u002e\\u002e") ||  // Unicode escaped ..
+               lowerPath.contains("\\x2e\\x2e") ||      // Hex escaped ..
+               lowerPath.contains("%u002e%u002e") ||    // Unicode URL encoded ..
+               lowerPath.contains("%c0%ae%c0%ae") ||    // Overlong UTF-8 encoded ..
+               lowerPath.contains("%e0%80%ae%e0%80%ae") || // Another overlong UTF-8 ..
+               lowerPath.contains("..%2f") ||           // Mixed encoded/unencoded
+               lowerPath.contains("..%5c") ||           // Mixed with backslash
+               lowerPath.matches(".*\\.{2,}.*");       // Multiple dots (3 or more)
+    }
+
+    /**
+     * Checks for Windows reserved device names.
+     */
+    private boolean containsWindowsDeviceName(String path) {
+        String upperPath = path.toUpperCase();
+        String[] deviceNames = {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        };
+
+        for (String device : deviceNames) {
+            // Check exact match or with extension
+            if (upperPath.equals(device) ||
+                upperPath.startsWith(device + ".") ||
+                upperPath.contains("/" + device) ||
+                upperPath.contains("\\" + device) ||
+                upperPath.contains("/" + device + ".") ||
+                upperPath.contains("\\" + device + ".")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks for invisible and zero-width characters.
+     */
+    private boolean containsInvisibleCharacters(String path) {
+        for (char c : path.toCharArray()) {
+            // Zero-width characters
+            if (c == '\u200B' || // Zero Width Space
+                c == '\u200C' || // Zero Width Non-Joiner
+                c == '\u200D' || // Zero Width Joiner
+                c == '\uFEFF' || // Zero Width No-Break Space (BOM)
+                c == '\u2060' || // Word Joiner
+                // Right-to-left override attacks
+                c == '\u202D' || // Left-to-Right Override
+                c == '\u202E' || // Right-to-Left Override
+                c == '\u2066' || // Left-to-Right Isolate
+                c == '\u2067' || // Right-to-Left Isolate
+                c == '\u2068' || // First Strong Isolate
+                c == '\u2069' || // Pop Directional Isolate
+                // Other invisible characters
+                Character.getType(c) == Character.FORMAT ||
+                Character.getType(c) == Character.CONTROL) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks for mixed directory separators that could bypass validation.
+     */
+    private boolean containsMixedSeparators(String path) {
+        boolean hasForwardSlash = path.contains("/");
+        boolean hasBackwardSlash = path.contains("\\");
+        return hasForwardSlash && hasBackwardSlash;
+    }
+
+    /**
+     * Checks for template injection patterns.
+     */
+    private boolean containsTemplateInjection(String path) {
+        return path.contains("${") ||      // EL injection
+               path.contains("#{") ||      // EL injection
+               path.contains("%{") ||      // Apache Struts injection
+               path.contains("$(") ||      // Shell command substitution
+               path.contains("{{") ||      // Handlebars/Mustache
+               path.contains("{%") ||      // Django/Jinja2
+               path.contains("<%") ||      // JSP/ASP
+               path.contains("[%") ||      // Template Toolkit
+               path.contains("[[") ||      // Lua template
+               path.contains("]]") ||      // Lua template end
+               path.contains("}}");        // Template end
+    }
+
+    /**
+     * Checks for case variation attacks on case-insensitive filesystems.
+     */
+    private boolean containsCaseVariationAttack(String path) {
+        String lowerPath = path.toLowerCase();
+        // Check for variations of system directories
+        return lowerPath.contains("/system32/") ||
+               lowerPath.contains("\\system32\\") ||
+               lowerPath.contains("/windows/") ||
+               lowerPath.contains("\\windows\\") ||
+               lowerPath.contains("/etc/") ||
+               lowerPath.contains("/usr/") ||
+               lowerPath.contains("/var/") ||
+               lowerPath.contains("/bin/") ||
+               lowerPath.contains("/sbin/") ||
+               // Check for variations of .. with different cases
+               lowerPath.matches(".*\\.[A-Z]\\.[a-z].*") ||
+               lowerPath.matches(".*\\.[a-z]\\.[A-Z].*");
+    }
+
+    /**
+     * Memory-efficient file reading that uses streaming for large files.
+     * <p>
+     * For smaller files (< 1MB), uses Files.readString for simplicity.
+     * For larger files, uses BufferedReader to stream content and avoid
+     * loading the entire file into memory at once.
+     * </p>
+     *
+     * @param filePath the path to the file to read
+     * @param fileSize the size of the file in bytes
+     * @return the file content as a string
+     * @throws IOException if an I/O error occurs
+     */
+    private String readFileContent(Path filePath, long fileSize) throws IOException {
+        // For smaller files, use the simple approach
+        if (fileSize < 1024 * 1024) { // 1MB threshold
+            return Files.readString(filePath, StandardCharsets.UTF_8);
+        }
+
+        // For larger files, use streaming approach with buffer size based on file size
+        int bufferSize = calculateOptimalBufferSize(fileSize);
+        StringBuilder content = new StringBuilder((int) Math.min(fileSize, Integer.MAX_VALUE));
+
+        try (BufferedReader reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8)) {
+            char[] buffer = new char[bufferSize];
+            int bytesRead;
+
+            while ((bytesRead = reader.read(buffer)) != -1) {
+                content.append(buffer, 0, bytesRead);
+
+                // Safety check to prevent excessive memory usage
+                if (content.length() > maxFileSize) {
+                    throw new IOException("File content exceeds maximum allowed size during reading");
+                }
+            }
+        }
+
+        return content.toString();
+    }
+
+    /**
+     * Calculates an optimal buffer size based on file size for efficient reading.
+     *
+     * @param fileSize the size of the file in bytes
+     * @return optimal buffer size in bytes
+     */
+    private int calculateOptimalBufferSize(long fileSize) {
+        // Use larger buffers for larger files, but cap at reasonable limits
+        if (fileSize < 10 * 1024) { // < 10KB
+            return 1024; // 1KB buffer
+        } else if (fileSize < 100 * 1024) { // < 100KB
+            return 4096; // 4KB buffer
+        } else if (fileSize < 1024 * 1024) { // < 1MB
+            return 8192; // 8KB buffer
+        } else {
+            return 16384; // 16KB buffer for large files
+        }
     }
 
     /**
