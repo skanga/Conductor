@@ -75,6 +75,30 @@ public class ConversationalAgent implements SubAgent {
      * conversations exist. Memory is loaded up to the configured limit and
      * becomes immediately available for context in subsequent interactions.
      * </p>
+     * <p>
+     * <strong>Usage Example - Creating an Agent with Tools:</strong>
+     * </p>
+     * <pre>{@code
+     * // Set up tool registry with file operations
+     * ToolRegistry toolRegistry = new ToolRegistry();
+     * toolRegistry.register(new FileReadTool());
+     * toolRegistry.register(new WebSearchTool());
+     *
+     * // Create a research agent with tool access
+     * ConversationalAgent researcher = new ConversationalAgent(
+     *     "research-agent",
+     *     "AI researcher capable of reading files and searching the web",
+     *     new OpenAiLLMProvider(),
+     *     "You are a research assistant. Use available tools to gather information: {{input}}",
+     *     toolRegistry,
+     *     memoryStore
+     * );
+     *
+     * // Execute research task
+     * ExecutionResult result = researcher.execute(
+     *     new ExecutionInput("Research the latest trends in AI safety", null)
+     * );
+     * }</pre>
      *
      * @param agentName the unique identifier for this agent, used as the database key
      * @param agentDescription a human-readable description of the agent's purpose
@@ -104,6 +128,28 @@ public class ConversationalAgent implements SubAgent {
 
     /**
      * Convenience constructor for text-only agents (no tools).
+     * <p>
+     * <strong>Usage Example - Simple Text Agent:</strong>
+     * </p>
+     * <pre>{@code
+     * // Create a simple text-based agent for writing tasks
+     * ConversationalAgent writer = new ConversationalAgent(
+     *     "content-writer",
+     *     "Professional content writer specializing in marketing copy",
+     *     new AnthropicLLMProvider(),
+     *     "Write engaging marketing content for: {{input}}",
+     *     memoryStore
+     * );
+     *
+     * // Generate marketing content
+     * ExecutionResult result = writer.execute(
+     *     new ExecutionInput("eco-friendly water bottles", null)
+     * );
+     *
+     * if (result.success()) {
+     *     System.out.println("Marketing copy: " + result.output());
+     * }
+     * }</pre>
      */
     public ConversationalAgent(String agentName, String agentDescription, LLMProvider llmProvider,
                                String promptTemplate, MemoryStore memoryStore) throws SQLException {
@@ -217,21 +263,24 @@ public class ConversationalAgent implements SubAgent {
         StringBuilder promptBuilder = new StringBuilder();
         promptBuilder.append("System: ").append(agentDescription).append("\n\n");
 
-        // Add memory context if available
-        memoryLock.readLock().lock();
-        try {
-            if (!agentMemory.isEmpty()) {
-                promptBuilder.append("Memory (most recent first):\n");
-                ApplicationConfig.MemoryConfig memoryConfig = ApplicationConfig.getInstance().getMemoryConfig();
-                int memoryLimit = memoryConfig.getDefaultMemoryLimit();
-                int memoryStart = Math.max(0, agentMemory.size() - memoryLimit);
-                for (int i = memoryStart; i < agentMemory.size(); i++) {
-                    promptBuilder.append("- ").append(agentMemory.get(i)).append("\n");
+        // Add memory context if available - optimize by checking size before acquiring lock
+        if (!agentMemory.isEmpty()) {
+            memoryLock.readLock().lock();
+            try {
+                // Double-check after acquiring lock (memory might have been cleared)
+                if (!agentMemory.isEmpty()) {
+                    promptBuilder.append("Memory (most recent first):\n");
+                    ApplicationConfig.MemoryConfig memoryConfig = ApplicationConfig.getInstance().getMemoryConfig();
+                    int memoryLimit = memoryConfig.getDefaultMemoryLimit();
+                    int memoryStart = Math.max(0, agentMemory.size() - memoryLimit);
+                    for (int i = memoryStart; i < agentMemory.size(); i++) {
+                        promptBuilder.append("- ").append(agentMemory.get(i)).append("\n");
+                    }
+                    promptBuilder.append("\n");
                 }
-                promptBuilder.append("\n");
+            } finally {
+                memoryLock.readLock().unlock();
             }
-        } finally {
-            memoryLock.readLock().unlock();
         }
 
         // Add tool availability information

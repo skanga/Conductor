@@ -117,7 +117,7 @@ class DefaultWorkflowEngineTest {
         @Test
         @DisplayName("Should execute simple workflow with single input")
         void shouldExecuteSimpleWorkflowWithSingleInput() throws Exception {
-            lenient().when(mockTemplateEngine.renderString(anyString(), any(Map.class)))
+            lenient().when(mockTemplateEngine.renderString(anyString(), anyMap()))
                 .thenReturn("processed prompt");
 
             WorkflowEngine.WorkflowResult result = engine.execute("test input");
@@ -132,7 +132,7 @@ class DefaultWorkflowEngineTest {
         @Test
         @DisplayName("Should execute workflow with multiple inputs")
         void shouldExecuteWorkflowWithMultipleInputs() throws Exception {
-            lenient().when(mockTemplateEngine.renderString(anyString(), any(Map.class)))
+            lenient().when(mockTemplateEngine.renderString(anyString(), anyMap()))
                 .thenReturn("processed prompt");
 
             WorkflowEngine.WorkflowResult result = engine.execute("input1", "input2", "input3");
@@ -191,7 +191,7 @@ class DefaultWorkflowEngineTest {
         @Test
         @DisplayName("Should execute stages in sequence")
         void shouldExecuteStagesInSequence() throws Exception {
-            lenient().when(mockTemplateEngine.renderString(anyString(), any(Map.class)))
+            lenient().when(mockTemplateEngine.renderString(anyString(), anyMap()))
                 .thenReturn("processed prompt");
 
             // Create multiple stages
@@ -207,7 +207,7 @@ class DefaultWorkflowEngineTest {
         @Test
         @DisplayName("Should pass context between stages")
         void shouldPassContextBetweenStages() throws Exception {
-            lenient().when(mockTemplateEngine.renderString(anyString(), any(Map.class)))
+            lenient().when(mockTemplateEngine.renderString(anyString(), anyMap()))
                 .thenReturn("processed prompt");
 
             Map<String, Object> initialVariables = Map.of(
@@ -234,7 +234,7 @@ class DefaultWorkflowEngineTest {
             stages.get(0).setResultValidator(result ->
                 DefaultWorkflowEngine.ValidationResult.invalid("Test validation failure"));
 
-            lenient().when(mockTemplateEngine.renderString(anyString(), any(Map.class)))
+            lenient().when(mockTemplateEngine.renderString(anyString(), anyMap()))
                 .thenReturn("processed prompt");
 
             // Should still complete execution but mark validation failure
@@ -251,7 +251,7 @@ class DefaultWorkflowEngineTest {
             List<DefaultWorkflowEngine.StageDefinition> stages = createTestStages(1);
             stages.get(0).setMaxRetries(2);
 
-            lenient().when(mockTemplateEngine.renderString(anyString(), any(Map.class)))
+            lenient().when(mockTemplateEngine.renderString(anyString(), anyMap()))
                 .thenReturn("processed prompt");
 
             DefaultWorkflowEngine.WorkflowResult result = engine.executeWorkflow(stages);
@@ -361,7 +361,7 @@ class DefaultWorkflowEngineTest {
         @Test
         @DisplayName("Should handle concurrent engine operations")
         void shouldHandleConcurrentEngineOperations() throws Exception {
-            lenient().when(mockTemplateEngine.renderString(anyString(), any(Map.class)))
+            lenient().when(mockTemplateEngine.renderString(anyString(), anyMap()))
                 .thenReturn("processed prompt");
 
             int threadCount = 5;

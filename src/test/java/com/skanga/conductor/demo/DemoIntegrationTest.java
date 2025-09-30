@@ -174,13 +174,19 @@ class DemoIntegrationTest {
     private void testProgrammaticToolUsage() throws Exception {
         String agentName = "test-prog-agent-" + System.currentTimeMillis();
 
+        // Use OS-appropriate command for testing
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
+        String testCommand = isWindows ? "cmd /c echo Hello Integration Test" : "echo Hello Integration Test";
+        String promptText = isWindows ? "Please run the command: cmd /c echo Hello Integration Test" :
+                                       "Please run the command: echo Hello Integration Test";
+
         // Create a mock provider that returns tool calls in JSON format
         MockLLMProvider toolAwareMockProvider = new MockLLMProvider("tool-aware-test") {
             @Override
             public String generate(String prompt) throws ConductorException.LLMProviderException {
                 // Simulate the LLM deciding to use tools based on the prompt
-                if (prompt.contains("echo") || prompt.contains("run")) {
-                    return "{\"tool\": \"code_runner\", \"arguments\": \"echo Hello Integration Test\"}";
+                if (prompt.contains("echo") || prompt.contains("run") || prompt.contains("cmd")) {
+                    return "{\"tool\": \"code_runner\", \"arguments\": \"" + testCommand + "\"}";
                 }
                 return super.generate(prompt);
             }
@@ -190,13 +196,13 @@ class DemoIntegrationTest {
                 agentName,
                 "Test programmatic tool agent",
                 toolAwareMockProvider,
+                "Process the following input: {{prompt}}",
                 toolRegistry,
                 memoryStore
         );
 
         // Test with a prompt that should trigger tool usage
-        String prompt = "Please run the command: echo Hello Integration Test";
-        ExecutionResult result = progAgent.execute(new ExecutionInput(prompt, null));
+        ExecutionResult result = progAgent.execute(new ExecutionInput(promptText, null));
 
         // Validate programmatic tool execution
         assertNotNull(result, "Programmatic tool result should not be null");
@@ -219,6 +225,7 @@ class DemoIntegrationTest {
                 agentName,
                 "Test LLM tool agent",
                 mockProvider,
+                "You are a helpful assistant. Process this request: {{prompt}}",
                 toolRegistry,
                 memoryStore
         );
@@ -248,8 +255,11 @@ class DemoIntegrationTest {
         registry.register(new FileReadTool());
         registry.register(new WebSearchTool());
 
-        // Use restricted CodeRunnerTool for testing
-        Set<String> allowedCommands = Set.of("echo", "pwd", "whoami", "java");
+        // Use restricted CodeRunnerTool for testing (OS-aware commands)
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("windows");
+        Set<String> allowedCommands = isWindows ?
+            Set.of("cmd", "java", "dir", "echo") :
+            Set.of("echo", "pwd", "whoami", "java");
         registry.register(new CodeRunnerTool(Duration.ofSeconds(5), allowedCommands));
 
         return registry;

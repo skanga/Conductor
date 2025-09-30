@@ -49,7 +49,7 @@ The framework provides a `SubAgent` interface which is implemented by `Conversat
 
 ```bash
 # Clone and run demo in one command
-git clone <repository-url> && cd Conductor
+git clone https://github.com/skanga/conductor && cd Conductor
 mvn clean install && mvn exec:java@book-demo -Dexec.args="Quick Demo"
 ```
 
@@ -146,7 +146,7 @@ mvn clean install
 ```
 
 #### IDE Integration
-- **IntelliJ IDEA**: Import as Maven project, install Lombok plugin
+- **IntelliJ IDEA**: Import as Maven project
 - **VS Code**: Install Java Extension Pack, configure workspace settings
 - **Eclipse**: Import as Existing Maven Project
 
@@ -177,7 +177,7 @@ mvn test -Dgroups="security"              # Security tests only
 #### Performance Testing
 ```bash
 mvn test -Dtest=ThreadSafetyTest          # Concurrency tests
-mvn test -Dtest="*Performance*"          # Performance benchmarks
+mvn test -Dtest="*Performance*"           # Performance benchmarks
 ```
 
 ### Troubleshooting

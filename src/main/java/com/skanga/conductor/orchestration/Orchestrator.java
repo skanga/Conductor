@@ -76,6 +76,32 @@ public class Orchestrator {
      * execution to the found agent. This is useful when you know exactly
      * which agent should handle a particular type of task.
      * </p>
+     * <p>
+     * <strong>Usage Example:</strong>
+     * </p>
+     * <pre>{@code
+     * // Register a specialized writing agent
+     * ConversationalAgent writer = new ConversationalAgent(
+     *     "technical-writer",
+     *     "Expert technical writer for documentation",
+     *     llmProvider,
+     *     "Write clear, concise technical documentation for: {{input}}",
+     *     memoryStore
+     * );
+     * registry.register(writer);
+     *
+     * // Execute a task using the specific agent
+     * ExecutionResult result = orchestrator.callExplicit(
+     *     "technical-writer",
+     *     new ExecutionInput("API documentation for the /users endpoint", null)
+     * );
+     *
+     * if (result.success()) {
+     *     System.out.println("Generated documentation: " + result.output());
+     * } else {
+     *     System.err.println("Documentation generation failed");
+     * }
+     * }</pre>
      *
      * @param agentName the unique name of the agent to execute
      * @param input the execution input containing content and context
@@ -91,7 +117,10 @@ public class Orchestrator {
             throw new IllegalArgumentException("input cannot be null");
         }
         SubAgent agent = registry.get(agentName);
-        if (agent == null) throw new IllegalArgumentException("No agent: " + agentName);
+        if (agent == null) {
+            throw new IllegalArgumentException("Agent not found in registry: " + agentName +
+                ". Available agents: " + String.join(", ", registry.getRegisteredAgentNames()));
+        }
         return agent.execute(input);
     }
 
@@ -103,6 +132,27 @@ public class Orchestrator {
      * but is not registered in the global agent registry. This is useful for
      * one-off tasks or dynamic workflow scenarios.
      * </p>
+     * <p>
+     * <strong>Usage Example:</strong>
+     * </p>
+     * <pre>{@code
+     * // Create a specialized agent for data analysis
+     * SubAgent dataAnalyst = orchestrator.createImplicitAgent(
+     *     "data-analyst",
+     *     "Specialized agent for analyzing CSV data and generating insights",
+     *     llmProvider,
+     *     "You are a data analyst. Analyze the following data: {{input}}"
+     * );
+     *
+     * // Execute a task with the agent
+     * ExecutionResult result = dataAnalyst.execute(
+     *     new ExecutionInput("sales_data.csv contents here", null)
+     * );
+     *
+     * if (result.success()) {
+     *     System.out.println("Analysis: " + result.output());
+     * }
+     * }</pre>
      *
      * @param nameHint a suggested name for the agent (may be modified for uniqueness)
      * @param description a description of the agent's purpose

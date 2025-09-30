@@ -103,4 +103,18 @@ public class SubAgentRegistry {
     public boolean isEmpty() {
         return agents.isEmpty();
     }
+
+    /**
+     * Returns the names of all registered agents.
+     * <p>
+     * This method returns a snapshot of agent names at the time of the call.
+     * The returned set is not backed by the registry, so changes to the registry
+     * after this call will not be reflected in the returned set.
+     * </p>
+     *
+     * @return a set of agent names currently registered in the registry
+     */
+    public java.util.Set<String> getRegisteredAgentNames() {
+        return new java.util.HashSet<>(agents.keySet());
+    }
 }

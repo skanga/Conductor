@@ -16,9 +16,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Performance tests for PromptTemplateEngine to ensure acceptable performance
  * under various load conditions and template complexities.
+ *
+ * Note: These tests run by default with reasonable thresholds. For intensive
+ * performance testing, set -Dtest.performance.intensive=true
  */
 @DisplayName("PromptTemplateEngine Performance Tests")
-@EnabledIfSystemProperty(named = "test.performance", matches = "true")
 class PromptTemplateEnginePerformanceTest {
 
     private PromptTemplateEngine engine;
@@ -32,23 +34,30 @@ class PromptTemplateEnginePerformanceTest {
         noCacheEngine = new PromptTemplateEngine(false, 0);
     }
 
+    private boolean isIntensiveTestingEnabled() {
+        return "true".equals(System.getProperty("test.performance.intensive"));
+    }
+
     @Test
     @DisplayName("Should render simple templates within performance threshold")
     void shouldRenderSimpleTemplatesWithinPerformanceThreshold() {
         String template = "Hello {{name}}, welcome to {{place}}!";
         Map<String, Object> variables = Map.of("name", "User", "place", "System");
 
+        // Use smaller iteration count for regular testing
+        int iterations = isIntensiveTestingEnabled() ? 10000 : 1000;
+        long threshold = isIntensiveTestingEnabled() ? 1000 : 500; // More lenient for regular tests
+
         long startTime = System.nanoTime();
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0; i < iterations; i++) {
             engine.renderString(template, variables);
         }
         long endTime = System.nanoTime();
 
         long durationMs = (endTime - startTime) / 1_000_000;
-        System.out.println("Simple template rendering (10k iterations): " + durationMs + "ms");
+        System.out.println("Simple template rendering (" + iterations + " iterations): " + durationMs + "ms");
 
-        // Should complete 10k simple renderings in under 1 second
-        assertTrue(durationMs < 1000, "Simple template rendering took too long: " + durationMs + "ms");
+        assertTrue(durationMs < threshold, "Simple template rendering took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }
 
     @Test
@@ -61,7 +70,7 @@ class PromptTemplateEnginePerformanceTest {
             "condition", true
         );
 
-        int iterations = 5000;
+        int iterations = isIntensiveTestingEnabled() ? 5000 : 500;
 
         // Test with caching
         long startCached = System.nanoTime();
@@ -82,9 +91,16 @@ class PromptTemplateEnginePerformanceTest {
         System.out.println("Cached rendering (" + iterations + " iterations): " + cachedDuration + "ms");
         System.out.println("Non-cached rendering (" + iterations + " iterations): " + noCacheDuration + "ms");
 
-        // Caching should provide significant performance improvement for repeated templates
-        assertTrue(cachedDuration < noCacheDuration,
-            "Caching should be faster than non-cached for repeated templates");
+        // For small iteration counts, the difference might not be significant due to JVM warmup
+        // Just verify both complete successfully and report the results
+        assertTrue(cachedDuration >= 0 && noCacheDuration >= 0,
+            "Both cached and non-cached rendering should complete successfully");
+
+        // Only assert performance difference for intensive testing where the difference is meaningful
+        if (isIntensiveTestingEnabled() && iterations >= 1000) {
+            assertTrue(cachedDuration < noCacheDuration,
+                "Caching should be faster than non-cached for repeated templates in intensive testing");
+        }
     }
 
     @Test
@@ -93,8 +109,9 @@ class PromptTemplateEnginePerformanceTest {
         StringBuilder largeTemplate = new StringBuilder();
         Map<String, Object> variables = new HashMap<>();
 
-        // Create a template with 1000 variables
-        for (int i = 0; i < 1000; i++) {
+        // Create a template with variables (fewer for regular testing)
+        int varCount = isIntensiveTestingEnabled() ? 1000 : 100;
+        for (int i = 0; i < varCount; i++) {
             largeTemplate.append("Variable ").append(i).append(": {{var").append(i).append("}} ");
             variables.put("var" + i, "value" + i);
         }
@@ -104,12 +121,12 @@ class PromptTemplateEnginePerformanceTest {
         long endTime = System.nanoTime();
 
         long durationMs = (endTime - startTime) / 1_000_000;
-        System.out.println("Large template rendering (1000 variables): " + durationMs + "ms");
+        long threshold = isIntensiveTestingEnabled() ? 100 : 200;
+        System.out.println("Large template rendering (" + varCount + " variables): " + durationMs + "ms");
 
         assertNotNull(result);
-        assertTrue(result.length() > 10000);
-        // Should complete large template rendering in under 100ms
-        assertTrue(durationMs < 100, "Large template rendering took too long: " + durationMs + "ms");
+        assertTrue(result.length() > 1000);
+        assertTrue(durationMs < threshold, "Large template rendering took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }
 
     @Test
@@ -139,7 +156,8 @@ class PromptTemplateEnginePerformanceTest {
         );
 
         List<Map<String, Object>> activities = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
+        int activityCount = isIntensiveTestingEnabled() ? 100 : 20;
+        for (int i = 0; i < activityCount; i++) {
             activities.add(Map.of(
                 "timestamp", "2024-01-" + (i % 30 + 1),
                 "action", "  action" + i + "  ",
@@ -157,21 +175,21 @@ class PromptTemplateEnginePerformanceTest {
         long endTime = System.nanoTime();
 
         long durationMs = (endTime - startTime) / 1_000_000;
+        long threshold = isIntensiveTestingEnabled() ? 50 : 100;
         System.out.println("Complex nested template rendering: " + durationMs + "ms");
 
         assertNotNull(result);
         assertTrue(result.contains("JOHN DOE"));
         assertTrue(result.contains("ACTION0"));
-        // Should complete complex nested template in under 50ms
-        assertTrue(durationMs < 50, "Complex template rendering took too long: " + durationMs + "ms");
+        assertTrue(durationMs < threshold, "Complex template rendering took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }
 
     @Test
     @DisplayName("Should handle concurrent rendering performance")
     void shouldHandleConcurrentRenderingPerformance() throws InterruptedException {
         String template = "Hello {{name}}, your ID is {{id}} and status is {{status|upper}}";
-        int threadCount = 10;
-        int iterationsPerThread = 1000;
+        int threadCount = isIntensiveTestingEnabled() ? 10 : 3;
+        int iterationsPerThread = isIntensiveTestingEnabled() ? 1000 : 100;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         AtomicLong totalRenderTime = new AtomicLong(0);
 
@@ -207,8 +225,9 @@ class PromptTemplateEnginePerformanceTest {
         System.out.println("Total render time: " + avgRenderTimeMs + "ms");
 
         // Should complete concurrent rendering in reasonable time
-        assertTrue(overallDurationMs < 5000,
-            "Concurrent rendering took too long: " + overallDurationMs + "ms");
+        long threshold = isIntensiveTestingEnabled() ? 5000 : 10000;
+        assertTrue(overallDurationMs < threshold,
+            "Concurrent rendering took too long: " + overallDurationMs + "ms (threshold: " + threshold + "ms)");
     }
 
     @Test
@@ -223,18 +242,20 @@ class PromptTemplateEnginePerformanceTest {
         );
 
         long startTime = System.nanoTime();
+        int iterations = isIntensiveTestingEnabled() ? 1000 : 100;
         for (String template : templates) {
-            for (int i = 0; i < 1000; i++) {
+            for (int i = 0; i < iterations; i++) {
                 engine.validateTemplate(template);
             }
         }
         long endTime = System.nanoTime();
 
         long durationMs = (endTime - startTime) / 1_000_000;
-        System.out.println("Template validation (5000 validations): " + durationMs + "ms");
+        int totalValidations = templates.size() * iterations;
+        long threshold = isIntensiveTestingEnabled() ? 200 : 500;
+        System.out.println("Template validation (" + totalValidations + " validations): " + durationMs + "ms");
 
-        // Should validate templates quickly
-        assertTrue(durationMs < 200, "Template validation took too long: " + durationMs + "ms");
+        assertTrue(durationMs < threshold, "Template validation took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }
 
     @Test
@@ -244,16 +265,17 @@ class PromptTemplateEnginePerformanceTest {
                                 "{{#each items}}{{name}} {{value|upper}}{{/each}} {{final.nested.deep.value}}";
 
         long startTime = System.nanoTime();
-        for (int i = 0; i < 10000; i++) {
+        int iterations = isIntensiveTestingEnabled() ? 10000 : 1000;
+        for (int i = 0; i < iterations; i++) {
             engine.extractVariableNames(complexTemplate);
         }
         long endTime = System.nanoTime();
 
         long durationMs = (endTime - startTime) / 1_000_000;
-        System.out.println("Variable extraction (10k extractions): " + durationMs + "ms");
+        long threshold = isIntensiveTestingEnabled() ? 500 : 1000;
+        System.out.println("Variable extraction (" + iterations + " extractions): " + durationMs + "ms");
 
-        // Should extract variables quickly
-        assertTrue(durationMs < 500, "Variable extraction took too long: " + durationMs + "ms");
+        assertTrue(durationMs < threshold, "Variable extraction took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }
 
     @Test
@@ -265,22 +287,23 @@ class PromptTemplateEnginePerformanceTest {
         long startTime = System.nanoTime();
 
         // Generate more templates than cache can hold
-        for (int i = 0; i < 1000; i++) {
+        int templateCount = isIntensiveTestingEnabled() ? 1000 : 200;
+        for (int i = 0; i < templateCount; i++) {
             String template = "Template " + i + ": {{value}}";
             limitedCacheEngine.renderString(template, variables);
         }
 
         long endTime = System.nanoTime();
         long durationMs = (endTime - startTime) / 1_000_000;
+        long threshold = isIntensiveTestingEnabled() ? 100 : 200;
 
-        System.out.println("Cache eviction test (1000 unique templates, 100 cache limit): " + durationMs + "ms");
+        System.out.println("Cache eviction test (" + templateCount + " unique templates, 100 cache limit): " + durationMs + "ms");
 
         // Cache size should be at limit
         PromptTemplateEngine.CacheStats stats = limitedCacheEngine.getCacheStats();
         assertEquals(100, stats.getCurrentSize());
 
-        // Should handle cache eviction efficiently
-        assertTrue(durationMs < 100, "Cache eviction took too long: " + durationMs + "ms");
+        assertTrue(durationMs < threshold, "Cache eviction took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }
 
     @Test
@@ -292,7 +315,8 @@ class PromptTemplateEnginePerformanceTest {
         long memoryBefore = runtime.totalMemory() - runtime.freeMemory();
 
         // Create many template instances
-        for (int i = 0; i < 1000; i++) {
+        int templateCount = isIntensiveTestingEnabled() ? 1000 : 200;
+        for (int i = 0; i < templateCount; i++) {
             String template = "Template {{var" + i + "}} with {{value|filter}} and {{nested.prop}}";
             Map<String, Object> variables = Map.of(
                 "var" + i, "value" + i,
@@ -306,11 +330,12 @@ class PromptTemplateEnginePerformanceTest {
         long memoryAfter = runtime.totalMemory() - runtime.freeMemory();
 
         long memoryUsed = memoryAfter - memoryBefore;
-        System.out.println("Memory used for 1000 template renderings: " +
+        System.out.println("Memory used for " + templateCount + " template renderings: " +
                           (memoryUsed / 1024) + " KB");
 
-        // Should not use excessive memory (less than 10MB)
-        assertTrue(memoryUsed < 10 * 1024 * 1024,
-            "Template engine used too much memory: " + (memoryUsed / 1024) + " KB");
+        // Should not use excessive memory (relaxed thresholds for testing)
+        long threshold = isIntensiveTestingEnabled() ? 10 * 1024 * 1024 : 20 * 1024 * 1024; // 10MB/20MB
+        assertTrue(memoryUsed < threshold,
+            "Template engine used too much memory: " + (memoryUsed / 1024) + " KB (threshold: " + (threshold / 1024) + " KB)");
     }
 }
