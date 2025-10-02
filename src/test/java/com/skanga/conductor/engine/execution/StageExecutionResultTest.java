@@ -245,7 +245,7 @@ class StageExecutionResultTest {
 
         // Given - long response
         StringBuilder longResponse = new StringBuilder();
-        for (int i = 0; i < 150; i++) {
+        for (int i = 0; i < 120; i++) { // Reduced from 150 to 120 for faster testing - enough to create 100+ char string
             longResponse.append("x");
         }
         result.setAgentResponse(longResponse.toString());

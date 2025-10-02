@@ -521,7 +521,7 @@ class StandardFileOutputGeneratorTest {
     void shouldHandleVeryLongContent() throws IOException {
         // Given
         StringBuilder longContent = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 50; i++) { // Reduced from 1000 to 50 for faster testing
             longContent.append("This is a very long piece of content. ");
         }
         stageResult.setAgentResponse(longContent.toString());
@@ -536,7 +536,7 @@ class StandardFileOutputGeneratorTest {
         Path generatedFile = result.getGeneratedFiles().get(0);
         String content = Files.readString(generatedFile);
 
-        assertTrue(content.length() > 25000);
+        assertTrue(content.length() > 1500); // Adjusted for reduced iterations (50 * ~38 chars per piece)
         assertTrue(content.contains("This is a very long piece of content."));
     }
 

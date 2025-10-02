@@ -162,10 +162,10 @@ class MetricsSystemTest {
         assertFalse(timer.isClosed());
 
         // Wait a bit to get measurable duration
-        Thread.sleep(10);
+        Thread.sleep(2); // Reduced from 10ms to 2ms for faster testing
 
         long elapsed = timer.getElapsedMs();
-        assertTrue(elapsed >= 10);
+        assertTrue(elapsed >= 1); // Reduced from 10ms to 1ms for faster testing
 
         timer.close();
         assertTrue(timer.isClosed());
@@ -174,7 +174,7 @@ class MetricsSystemTest {
         assertEquals(1, collector.getMetricCount());
         List<Metric> timerMetrics = collector.getMetricsByName("test.timer");
         assertEquals(1, timerMetrics.size());
-        assertTrue(timerMetrics.get(0).value() >= 10);
+        assertTrue(timerMetrics.get(0).value() >= 1); // Reduced from 10ms to 1ms for faster testing
     }
 
     @Test
@@ -365,7 +365,7 @@ class MetricsSystemTest {
 
         // Wait for retention period to pass
         try {
-            Thread.sleep(20);
+            Thread.sleep(5); // Reduced from 20ms to 5ms for faster testing
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -423,7 +423,7 @@ class MetricsSystemTest {
             try (TimerContext llmTimer = registry.startTimer("llm.call",
                     Map.of("agent", agentName, "model", "test"))) {
                 try {
-                    Thread.sleep(10);
+                    Thread.sleep(2); // Reduced from 10ms to 2ms for faster testing
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }

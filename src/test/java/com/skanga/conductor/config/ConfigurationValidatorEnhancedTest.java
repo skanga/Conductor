@@ -157,7 +157,7 @@ class ConfigurationValidatorEnhancedTest extends ConductorTestBase {
     void testLongPathBlocking() {
         // Create path longer than 4096 characters
         StringBuilder longPath = new StringBuilder();
-        for (int i = 0; i < 200; i++) {
+        for (int i = 0; i < 85; i++) { // Reduced from 200 to 85 for faster testing - still long enough to trigger validation
             longPath.append("very_long_directory_name_that_exceeds_reasonable_limits_");
         }
         longPath.append("config.properties");

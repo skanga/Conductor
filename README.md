@@ -175,10 +175,38 @@ mvn test -Dgroups="security"              # Security tests only
 ```
 
 #### Performance Testing
+
+**⚡ Fast Builds**: Performance tests are **disabled by default** to maintain ~1 minute build times.
+
 ```bash
+# Standard build (fast) - performance tests skipped
+mvn test                                   # ~1 minute build time
+
+# Enable basic performance validation - minimal iterations
+mvn test -Dtest.performance.enabled=true  # ~30 seconds additional time
+
+# Full performance benchmarking - extensive iterations
+mvn test -Dtest.performance.intensive=true # ~3-5 minutes additional time
+
+# Specific performance test classes
 mvn test -Dtest=ThreadSafetyTest          # Concurrency tests
-mvn test -Dtest="*Performance*"           # Performance benchmarks
+mvn test -Dtest=PromptTemplateEnginePerformanceTest -Dtest.performance.enabled=true
 ```
+
+**📊 Performance Test Categories:**
+
+| Test Type | Default | Basic (`enabled=true`) | Intensive (`intensive=true`) |
+|-----------|---------|----------------------|----------------------------|
+| **Template Rendering** | ❌ Skipped | 10 iterations | 10,000 iterations |
+| **Caching Performance** | ❌ Skipped | 5 iterations | 5,000 iterations |
+| **Concurrent Processing** | ❌ Skipped | 2×3 ops | 10×1000 ops |
+| **Memory Usage** | ❌ Skipped | 10 templates | 1,000 templates |
+| **Cache Eviction** | ❌ Skipped | 10 templates | 1,000 templates |
+
+**🔧 Build Time Optimization:**
+- **Problem**: Enabling all performance tests increased build time from 1 min → 7 min
+- **Solution**: Conditional execution with `@EnabledIfSystemProperty`
+- **Result**: Default builds back to ~1 minute, optional performance validation available
 
 ### Troubleshooting
 
@@ -189,7 +217,7 @@ mvn test -Dtest="*Performance*"           # Performance benchmarks
 | `UnsupportedClassVersionError` | Verify Java 21+ with `java --version` | [Setup Guide](DEVELOPER_SETUP.md#java-installation-options) |
 | `OutOfMemoryError` | Increase Maven memory: `export MAVEN_OPTS="-Xmx4g"` | [Troubleshooting](DEVELOPER_SETUP.md#troubleshooting-guide) |
 | Tests fail with DB locks | Clean test databases: `find target -name "*.db" -delete` | [Testing Guide](TESTING.md) |
-| Build hangs during tests | Skip tests: `mvn install -DskipTests` | [Build Options](DEVELOPER_SETUP.md#building-the-project) |
+| Build hangs during tests | Skip tests: `mvn install -DskipTests` or disable performance tests (default) | [Performance Testing](#performance-testing) |
 
 For comprehensive troubleshooting including IDE issues, environment problems, and debugging techniques, see **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md#troubleshooting-guide)**.
 

@@ -119,10 +119,11 @@ class TextToSpeechToolTest {
 
     @Test
     void shouldRejectExtremelyLongText() {
-        // Create text longer than 10,000 characters
+        // Create text longer than 10,000 characters - use efficient approach
         StringBuilder longText = new StringBuilder();
-        for (int i = 0; i < 10001; i++) {
-            longText.append("a");
+        String baseString = "a".repeat(1000); // Create 1000 char string
+        for (int i = 0; i < 11; i++) { // 11 * 1000 = 11,000 chars (over limit)
+            longText.append(baseString);
         }
 
         ExecutionInput input = new ExecutionInput(longText.toString(), null);
@@ -365,10 +366,11 @@ class TextToSpeechToolTest {
 
     @Test
     void shouldHandleMaximumAllowedTextLength() {
-        // Test with exactly 10,000 characters (the maximum allowed)
+        // Test with exactly 10,000 characters (the maximum allowed) - use efficient approach
         StringBuilder maxText = new StringBuilder();
-        for (int i = 0; i < 10000; i++) {
-            maxText.append("a");
+        String baseString = "a".repeat(1000); // Create 1000 char string
+        for (int i = 0; i < 10; i++) { // 10 * 1000 = exactly 10,000 chars
+            maxText.append(baseString);
         }
 
         ExecutionInput input = new ExecutionInput(maxText.toString(), null);

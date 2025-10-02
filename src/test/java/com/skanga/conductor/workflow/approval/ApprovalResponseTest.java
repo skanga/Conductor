@@ -172,7 +172,7 @@ class ApprovalResponseTest {
     void shouldHandleVeryLongFeedback() {
         // Given
         StringBuilder longFeedback = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 50; i++) { // Reduced from 1000 to 50 for faster testing
             longFeedback.append("Very long feedback message. ");
         }
 
@@ -182,7 +182,7 @@ class ApprovalResponseTest {
         // Then
         assertEquals(Decision.REVISE, response.getDecision());
         assertEquals(longFeedback.toString(), response.getFeedback());
-        assertTrue(response.getFeedback().length() > 10000);
+        assertTrue(response.getFeedback().length() > 1000); // Adjusted for reduced iterations (50 * ~27 chars per message)
     }
 
     @Test

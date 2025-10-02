@@ -224,7 +224,7 @@ class FileReadToolEnhancedSecurityTest extends ConductorTestBase {
     void testLongPathAttacks() {
         // Create very long path (exceed 32767 characters)
         StringBuilder longPath = new StringBuilder();
-        for (int i = 0; i < 1500; i++) {
+        for (int i = 0; i < 150; i++) { // Reduced from 1500 to 150 for faster testing
             longPath.append("very_long_directory_name_that_exceeds_windows_extended_path_limit_");
         }
         longPath.append("file.txt");

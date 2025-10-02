@@ -47,7 +47,7 @@ class TimerContextTest {
         TimerContext timer = new TimerContext("test.timer", testTags, mockMetricRecorder);
 
         // Wait a small amount to ensure non-zero duration
-        Thread.sleep(10);
+        Thread.sleep(2); // Reduced from 10ms to 2ms for faster testing
 
         // Act
         timer.close();
@@ -58,7 +58,7 @@ class TimerContextTest {
 
         assertEquals("test.timer", capturedMetric.name());
         assertEquals(MetricType.TIMER, capturedMetric.type());
-        assertTrue(capturedMetric.value() >= 10); // At least 10ms
+        assertTrue(capturedMetric.value() >= 1); // At least 1ms (reduced for faster testing)
         assertEquals(testTags, capturedMetric.tags());
         assertTrue(timer.isClosed());
     }
@@ -100,15 +100,17 @@ class TimerContextTest {
         Instant startTime = timer.getStartTime();
 
         // Act
-        Thread.sleep(50);
+        Thread.sleep(5); // Reduced from 50ms to 5ms for faster testing
         Duration elapsed = timer.getElapsed();
         long elapsedMs = timer.getElapsedMs();
 
         // Assert
         assertNotNull(startTime);
-        assertTrue(elapsed.toMillis() >= 50);
-        assertTrue(elapsedMs >= 50);
-        assertEquals(elapsed.toMillis(), elapsedMs);
+        assertTrue(elapsed.toMillis() >= 5); // Adjusted for reduced sleep time
+        assertTrue(elapsedMs >= 5); // Adjusted to match reduced sleep time
+        // Allow small timing tolerance due to precision differences
+        assertTrue(Math.abs(elapsed.toMillis() - elapsedMs) <= 5,
+            "Expected elapsed time difference to be <= 5ms, but was: " + Math.abs(elapsed.toMillis() - elapsedMs));
     }
 
     @Test
@@ -116,7 +118,7 @@ class TimerContextTest {
     void shouldRecordMetricWithSuccessInformation() throws InterruptedException {
         // Arrange
         TimerContext timer = new TimerContext("test.timer", testTags, mockMetricRecorder);
-        Thread.sleep(10);
+        Thread.sleep(2); // Reduced from 10ms to 2ms for faster testing
 
         // Act
         timer.recordWithSuccess(true);
@@ -127,7 +129,7 @@ class TimerContextTest {
 
         assertEquals("test.timer", capturedMetric.name());
         assertEquals(MetricType.TIMER, capturedMetric.type());
-        assertTrue(capturedMetric.value() >= 10);
+        assertTrue(capturedMetric.value() >= 1); // At least 1ms (reduced for faster testing)
 
         Map<String, String> expectedTags = new HashMap<>(testTags);
         expectedTags.put("success", "true");

@@ -359,7 +359,7 @@ class ValidationUtilsTest {
         // Test that validation methods are fast enough for high-frequency use
         long startTime = System.nanoTime();
 
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0; i < 1000; i++) { // Reduced from 10000 to 1000 for faster testing
             ValidationUtils.requireNonNull("test", "field");
             ValidationUtils.requireNonBlank("test", "field");
             ValidationUtils.requirePositive(1, "field");

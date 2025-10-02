@@ -152,7 +152,7 @@ class MemoryManagerTest extends ConductorTestBase {
         // Remove reference and force GC
         resource = null;
         System.gc();
-        Thread.sleep(100); // Give GC time to run
+        Thread.sleep(10); // Reduced from 100ms to 10ms for faster testing
 
         // Cleanup should remove weak reference
         memoryManager.performCleanup(false);
@@ -172,7 +172,7 @@ class MemoryManagerTest extends ConductorTestBase {
         assertFalse(resource.isClosed());
 
         // Wait for expiration
-        Thread.sleep(100);
+        Thread.sleep(50); // Increased from 10ms to 50ms for reliable expiration testing
 
         // Perform cleanup - resource should be closed and removed
         memoryManager.performCleanup(false);

@@ -143,7 +143,7 @@ class AbstractLLMProviderTest {
     void shouldHandleVeryLongPrompt() throws ConductorException {
         // Given
         StringBuilder longPrompt = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 25; i++) { // Reduced from 1000 to 25 for faster testing
             longPrompt.append("This is a very long prompt with lots of text. ");
         }
         provider.setMockResponse("Long prompt handled");

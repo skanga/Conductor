@@ -29,6 +29,19 @@ mvn verify
 
 # Package the application
 mvn package
+
+# Performance Testing (disabled by default for fast builds)
+# Standard build - performance tests skipped (~1 minute)
+mvn test
+
+# Enable basic performance validation - minimal iterations (~30s additional)
+mvn test -Dtest.performance.enabled=true
+
+# Full performance benchmarking - extensive iterations (~3-5min additional)
+mvn test -Dtest.performance.intensive=true
+
+# Run specific performance tests
+mvn test -Dtest=PromptTemplateEnginePerformanceTest -Dtest.performance.enabled=true
 ```
 
 ### Running Demos
@@ -217,7 +230,10 @@ The framework includes comprehensive unit test coverage with 220+ tests covering
 - **Unit Tests**: Isolated component testing with mocked dependencies (JUnit 5 + Mockito)
 - **Integration Tests**: Component interaction and workflow validation
 - **Security Tests**: Input validation, access control, and attack prevention
-- **Performance Tests**: Concurrent execution safety and resource usage
+- **Performance Tests**: Template rendering, caching, concurrent execution, and memory usage
+  - **Disabled by default** to maintain fast CI builds (~1 minute)
+  - **Enable with**: `-Dtest.performance.enabled=true` (basic validation)
+  - **Intensive mode**: `-Dtest.performance.intensive=true` (full benchmarking)
 
 ### Key Test Coverage
 - **Agent System**: ConversationalAgent behavior and error handling

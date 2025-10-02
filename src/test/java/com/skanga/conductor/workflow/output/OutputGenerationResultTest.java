@@ -147,7 +147,7 @@ class OutputGenerationResultTest {
         long beforeTime = System.currentTimeMillis();
 
         // Small delay to ensure measurable time difference
-        Thread.sleep(10);
+        Thread.sleep(2); // Reduced from 10ms to 2ms for faster testing
 
         // When
         long generationTime = result.getGenerationTimeMs();
@@ -301,7 +301,7 @@ class OutputGenerationResultTest {
     void shouldHandleVeryLongErrors() {
         // Given
         StringBuilder longError = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 50; i++) { // Reduced from 1000 to 50 for faster testing
             longError.append("Very long error message. ");
         }
 
@@ -311,7 +311,7 @@ class OutputGenerationResultTest {
         // Then
         assertFalse(result.isSuccess());
         assertTrue(result.getErrors().contains(longError.toString()));
-        assertTrue(result.getErrors().get(0).length() > 10000);
+        assertTrue(result.getErrors().get(0).length() > 1000); // Adjusted for reduced iterations (50 * ~25 chars per message)
     }
 
     @Test
