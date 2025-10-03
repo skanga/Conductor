@@ -202,7 +202,8 @@ class InMemoryMetricsCollectorTest {
         assertEquals(1, test4Metrics.size());
     }
 
-    @org.junit.jupiter.api.Disabled("Temporarily disabled - flaky timing test affecting performance optimization")
+    @org.junit.jupiter.api.Disabled("Flaky timing test - requires comprehensive mode and stable timing environment")
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Should handle retention period cleanup")
     void shouldHandleRetentionPeriodCleanup() throws InterruptedException {

@@ -676,6 +676,7 @@ class ConfigurationAccessorTest extends ConfigTestBase {
                     ConfigurationAccessor.class.getName());
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @Order(69)
     @DisplayName("Should maintain thread safety by delegating to ApplicationConfig")

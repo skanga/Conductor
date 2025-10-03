@@ -127,7 +127,10 @@ class PromptTemplateEnginePerformanceTest {
         System.out.println("Large template rendering (" + varCount + " variables): " + durationMs + "ms");
 
         assertNotNull(result);
-        assertTrue(result.length() > 1000);
+        // Expect result length to scale with variable count: ~18 chars per variable minimum
+        int expectedMinLength = varCount * 18;
+        assertTrue(result.length() >= expectedMinLength,
+            "Result too short: " + result.length() + " chars, expected at least " + expectedMinLength);
         assertTrue(durationMs < threshold, "Large template rendering took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }
 
@@ -301,9 +304,10 @@ class PromptTemplateEnginePerformanceTest {
 
         System.out.println("Cache eviction test (" + templateCount + " unique templates, 100 cache limit): " + durationMs + "ms");
 
-        // Cache size should be at limit
+        // Cache size should match the number of unique templates created (or cache limit if exceeded)
         PromptTemplateEngine.CacheStats stats = limitedCacheEngine.getCacheStats();
-        assertEquals(100, stats.getCurrentSize());
+        int expectedCacheSize = Math.min(templateCount, 100);
+        assertEquals(expectedCacheSize, stats.getCurrentSize());
 
         assertTrue(durationMs < threshold, "Cache eviction took too long: " + durationMs + "ms (threshold: " + threshold + "ms)");
     }

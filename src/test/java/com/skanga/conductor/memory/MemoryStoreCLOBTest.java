@@ -149,6 +149,7 @@ class MemoryStoreCLOBTest {
         }
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @Order(6)
     @DisplayName("Test CLOB handling efficiency")

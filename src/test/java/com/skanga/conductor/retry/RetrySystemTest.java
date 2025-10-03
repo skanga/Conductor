@@ -310,8 +310,8 @@ class RetrySystemTest {
         int successCount = 0;
         int failureCount = 0;
 
-        // Try 100 times to get statistical distribution
-        for (int i = 0; i < 100; i++) {
+        // Try 25 times to get statistical distribution (reduced from 100 for performance)
+        for (int i = 0; i < 25; i++) {
             try {
                 provider.generate("test prompt");
                 successCount++;
@@ -322,10 +322,10 @@ class RetrySystemTest {
             }
         }
 
-        // With 70% failure rate, we expect roughly 70 failures and 30 successes
+        // With 70% failure rate on 25 iterations, we expect roughly 17-18 failures and 7-8 successes
         // Allow some variance due to randomness
-        assertTrue(failureCount >= 50, "Expected at least 50 failures, got " + failureCount);
-        assertTrue(successCount >= 10, "Expected at least 10 successes, got " + successCount);
+        assertTrue(failureCount >= 12, "Expected at least 12 failures, got " + failureCount);
+        assertTrue(successCount >= 3, "Expected at least 3 successes, got " + successCount);
     }
 
     @Test

@@ -191,7 +191,7 @@ class MemoryStoreEnhancedTest extends DatabaseTestBase {
         });
     }
 
-    @org.junit.jupiter.api.Disabled("Temporarily disabled for performance optimization - expensive concurrent test")
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @Order(7)
     @DisplayName("Test concurrent memory operations thread safety")
@@ -245,7 +245,7 @@ class MemoryStoreEnhancedTest extends DatabaseTestBase {
         });
     }
 
-    @org.junit.jupiter.api.Disabled("Temporarily disabled for performance optimization - expensive concurrent test")
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @Order(8)
     @DisplayName("Test concurrent task output operations thread safety")

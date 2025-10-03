@@ -24,6 +24,64 @@ Subagents are the workhorses of the framework. They are specialized AI agents th
 
 The framework provides a `SubAgent` interface which is implemented by `ConversationalAgent` which is a subagent that uses a Large Language Model (LLM) to perform its task with conversational capabilities.
 
+#### Explicit vs Implicit Agents
+
+Understanding when to use explicit versus implicit agents is crucial for effective framework usage:
+
+**Explicit Agents** are formal, persistent agents with stable identities:
+- **Created via**: Manual registration in the `SubAgentRegistry`
+- **Lifecycle**: Long-lived, persisted across sessions
+- **Identity**: Stable, predefined names that can be referenced
+- **Use cases**: Reusable components, service-oriented agents, centralized management
+- **Example**: A `technical-writer` agent registered once and used across multiple documentation tasks
+
+```java
+// Create and register an explicit agent
+ConversationalAgent writer = new ConversationalAgent(
+    "technical-writer",
+    "Expert technical writer for documentation",
+    llmProvider,
+    "Write clear, concise technical documentation for: {{input}}",
+    memoryStore
+);
+registry.register(writer);
+
+// Use the explicit agent by name
+ExecutionResult result = orchestrator.callExplicit("technical-writer", input);
+```
+
+**Implicit Agents** are temporary, lightweight agents created on-demand:
+- **Created via**: `orchestrator.createImplicitAgent()`
+- **Lifecycle**: Exists only during current JVM session, not persisted
+- **Identity**: Dynamic names with UUID suffix for uniqueness
+- **Use cases**: One-off tasks, dynamic workflows, YAML-based workflows
+- **Example**: Temporary agents created for each stage of a book creation workflow
+
+```java
+// Create an implicit agent for a specific task
+SubAgent dataAnalyst = orchestrator.createImplicitAgent(
+    "data-analyst",
+    "Specialized agent for analyzing CSV data",
+    llmProvider,
+    "Analyze the following data: {{input}}"
+);
+
+// Use immediately (agent will be garbage collected after use)
+ExecutionResult result = dataAnalyst.execute(input);
+```
+
+**When to Use Each:**
+
+| Scenario | Agent Type | Reason |
+|----------|------------|--------|
+| Multi-step workflows (YAML/code-based) | **Implicit** | Memory consistency, automatic cleanup |
+| Reusable documentation generator | **Explicit** | Stable identity, cross-session persistence |
+| Dynamic task decomposition | **Implicit** | Flexible creation based on runtime needs |
+| Service-oriented architecture | **Explicit** | Named services, lifecycle management |
+| One-off data processing | **Implicit** | Temporary use, automatic resource cleanup |
+
+**Memory Consistency**: Both agent types share the orchestrator's `MemoryStore`, ensuring consistent context across workflow steps while providing different lifecycle management approaches.
+
 ## Features
 
 *   **Subagent Architecture**: A clean and powerful implementation of the subagent architecture.
@@ -174,39 +232,75 @@ mvn test -Dgroups="integration"           # Integration tests only
 mvn test -Dgroups="security"              # Security tests only
 ```
 
+#### Comprehensive Testing
+```bash
+# Standard build (fast) - comprehensive tests skipped
+mvn test                                   # ~1:23 minute build time
+
+# Enable comprehensive tests - includes expensive concurrent and stress tests
+mvn test -Dtest.comprehensive=true         # ~4+ minute build time
+mvn test -Dtest.comprehensive=true -Dtest.performance.enabled=true  # Full validation
+
+# Enable specific test categories
+mvn test -Dtest.performance.enabled=true  # Performance benchmarks only
+mvn test -Dtest.comprehensive=true -Dtest="*ThreadSafety*"  # Comprehensive + specific pattern
+```
+
+**📋 Comprehensive Test Categories:**
+
+| Test Type | Default | Comprehensive (`-Dtest.comprehensive=true`) |
+|-----------|---------|-------------------------------------------- |
+| **Thread Safety** | ❌ Skipped | ✅ All concurrent operations tested |
+| **Stress Tests** | ❌ Skipped | ✅ High-load scenario validation |
+| **CLOB Efficiency** | ❌ Skipped | ✅ Large data handling tests |
+| **Performance Benchmarks** | ❌ Skipped | ✅ With `-Dtest.performance.enabled=true` |
+| **WAV File Analysis** | ❌ Skipped | ✅ Audio processing validation |
+
+**⚡ Performance Optimization**: Comprehensive tests are conditionally executed to maintain fast development cycles while ensuring full validation when needed.
+
 #### Performance Testing
 
 **⚡ Fast Builds**: Performance tests are **disabled by default** to maintain ~1 minute build times.
 
 ```bash
 # Standard build (fast) - performance tests skipped
-mvn test                                   # ~1 minute build time
+mvn test                                   # ~1 minute, 41 tests skipped
 
-# Enable basic performance validation - minimal iterations
+# Enable basic performance validation - minimal iterations (quick smoke test)
 mvn test -Dtest.performance.enabled=true  # ~30 seconds additional time
 
-# Full performance benchmarking - extensive iterations
-mvn test -Dtest.performance.intensive=true # ~3-5 minutes additional time
+# Full performance benchmarking - extensive iterations (deep validation)
+mvn test -Dtest.performance.enabled=true -Dtest.performance.intensive=true
+                                          # ~3-5 minutes additional time
 
 # Specific performance test classes
-mvn test -Dtest=ThreadSafetyTest          # Concurrency tests
+mvn test -Dtest=ThreadSafetyTest -Dtest.comprehensive=true
 mvn test -Dtest=PromptTemplateEnginePerformanceTest -Dtest.performance.enabled=true
 ```
 
-**📊 Performance Test Categories:**
+**📊 Performance Test Modes:**
 
-| Test Type | Default | Basic (`enabled=true`) | Intensive (`intensive=true`) |
-|-----------|---------|----------------------|----------------------------|
+| Test Type | Default | Basic Mode | Intensive Mode |
+|-----------|---------|------------|----------------|
+| **Execution** | ❌ Skipped | `-Dtest.performance.enabled=true` | Add `-Dtest.performance.intensive=true` |
 | **Template Rendering** | ❌ Skipped | 10 iterations | 10,000 iterations |
 | **Caching Performance** | ❌ Skipped | 5 iterations | 5,000 iterations |
-| **Concurrent Processing** | ❌ Skipped | 2×3 ops | 10×1000 ops |
+| **Concurrent Processing** | ❌ Skipped | 2 threads × 3 ops | 10 threads × 1,000 ops |
 | **Memory Usage** | ❌ Skipped | 10 templates | 1,000 templates |
 | **Cache Eviction** | ❌ Skipped | 10 templates | 1,000 templates |
+| **Build Time Impact** | - | +30 seconds | +3-5 minutes |
 
-**🔧 Build Time Optimization:**
+**🎯 When to Use Each Mode:**
+- **Default**: Daily development, quick feedback loops
+- **Basic Mode** (`-Dtest.performance.enabled=true`): Pre-commit validation, smoke testing performance
+- **Intensive Mode** (add `-Dtest.performance.intensive=true`): Pre-release validation, performance regression analysis, benchmarking
+
+**🔧 Build Time Optimization Strategy:**
 - **Problem**: Enabling all performance tests increased build time from 1 min → 7 min
-- **Solution**: Conditional execution with `@EnabledIfSystemProperty`
-- **Result**: Default builds back to ~1 minute, optional performance validation available
+- **Solution**: Two-tier approach with `@EnabledIfSystemProperty` annotations
+  - `test.performance.enabled=true` → Enables performance test classes
+  - `test.performance.intensive=true` → Switches from 10 to 10,000 iterations
+- **Result**: Default builds ~1 minute, quick validation +30s, deep benchmarking on-demand
 
 ### Troubleshooting
 

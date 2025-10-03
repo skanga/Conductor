@@ -415,7 +415,7 @@ class ParallelTaskExecutorTest extends DatabaseTestBase {
         });
     }
 
-    @org.junit.jupiter.api.Disabled("Temporarily disabled for performance optimization - expensive concurrent stress test")
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @Order(12)
     @DisplayName("Should handle concurrent task execution stress test")

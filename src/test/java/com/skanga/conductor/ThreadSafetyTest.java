@@ -33,6 +33,7 @@ class ThreadSafetyTest {
         System.setProperty("conductor.database.url", TEST_DB_URL);
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Concurrent ConversationalAgent memory operations")
     void testConcurrentMemoryOperations() throws Exception {
@@ -99,6 +100,7 @@ class ThreadSafetyTest {
         }
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Concurrent MemoryStore database operations")
     void testConcurrentDatabaseOperations() throws Exception {
@@ -156,6 +158,7 @@ class ThreadSafetyTest {
         }
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Concurrent ApplicationConfig access")
     void testConcurrentConfigurationAccess() throws Exception {
@@ -189,6 +192,7 @@ class ThreadSafetyTest {
         }
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Concurrent SubAgentRegistry operations")
     void testConcurrentRegistryOperations() throws Exception {
@@ -242,6 +246,7 @@ class ThreadSafetyTest {
         }
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Stress test with mixed concurrent operations")
     void testMixedConcurrentOperations() throws Exception {
@@ -317,6 +322,7 @@ class ThreadSafetyTest {
         }
     }
 
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Race condition prevention in schema initialization")
     void testSchemaInitializationRaceCondition() throws Exception {

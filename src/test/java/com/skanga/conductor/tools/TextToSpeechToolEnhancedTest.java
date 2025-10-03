@@ -187,7 +187,7 @@ class TextToSpeechToolEnhancedTest {
         }
     }
 
-    @org.junit.jupiter.api.Disabled("Temporarily disabled for performance optimization - expensive WAV file analysis")
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.comprehensive", matches = "true")
     @Test
     @DisplayName("Should generate proper WAV file headers")
     void shouldGenerateProperWAVFileHeaders() throws IOException {
