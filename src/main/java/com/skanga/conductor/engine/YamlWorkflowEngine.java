@@ -7,7 +7,7 @@ import com.skanga.conductor.exception.ConductorException;
 import com.skanga.conductor.memory.MemoryStore;
 import com.skanga.conductor.workflow.config.*;
 import com.skanga.conductor.workflow.templates.AgentFactory;
-import com.skanga.conductor.workflow.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 import com.skanga.conductor.workflow.approval.HumanApprovalHandler;
 import com.skanga.conductor.workflow.approval.ConsoleApprovalHandler;
 import com.skanga.conductor.workflow.approval.ApprovalRequest;
@@ -23,8 +23,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -42,6 +44,7 @@ public class YamlWorkflowEngine implements WorkflowEngine {
     private final WorkflowConfigLoader configLoader;
     private final AgentFactory agentFactory;
     private final PromptTemplateEngine promptEngine;
+    private final StageExecutor stageExecutor;
     private final Map<String, SubAgent> agentCache;
     private final ParallelStageExecutor parallelExecutor;
     // private final IterativeStageExecutor iterativeExecutor;
@@ -62,20 +65,50 @@ public class YamlWorkflowEngine implements WorkflowEngine {
     private Map<String, StageExecutionResult> completedStageResults = new ConcurrentHashMap<>();
     private volatile boolean closed = false;
 
+    /**
+     * Creates a new YamlWorkflowEngine with default dependencies.
+     * <p>
+     * This constructor creates its own instances of all dependencies.
+     * For better testability, use the constructor that accepts dependencies.
+     * </p>
+     */
     public YamlWorkflowEngine() {
-        this.configLoader = new WorkflowConfigLoader();
-        this.agentFactory = new AgentFactory();
-        this.promptEngine = new PromptTemplateEngine();
+        this(new WorkflowConfigLoader(),
+             new AgentFactory(),
+             new PromptTemplateEngine(),
+             new StageExecutor(new PromptTemplateEngine()),
+             new StandardFileOutputGenerator());
+    }
+
+    /**
+     * Creates a new YamlWorkflowEngine with injected dependencies.
+     * <p>
+     * This constructor is preferred for testing and when you need to control
+     * the dependencies.
+     * </p>
+     *
+     * @param configLoader the workflow configuration loader
+     * @param agentFactory the agent factory
+     * @param promptEngine the prompt template engine
+     * @param stageExecutor the stage executor
+     * @param outputGenerator the file output generator
+     */
+    public YamlWorkflowEngine(WorkflowConfigLoader configLoader,
+                             AgentFactory agentFactory,
+                             PromptTemplateEngine promptEngine,
+                             StageExecutor stageExecutor,
+                             FileOutputGenerator outputGenerator) {
+        this.configLoader = configLoader;
+        this.agentFactory = agentFactory;
+        this.promptEngine = promptEngine;
+        this.stageExecutor = stageExecutor;
         this.agentCache = new ConcurrentHashMap<>();
-        this.outputGenerator = new StandardFileOutputGenerator();
+        this.outputGenerator = outputGenerator;
         this.variableSubstitution = new VariableSubstitution();
         this.parallelExecutor = new ParallelStageExecutor(
             Runtime.getRuntime().availableProcessors() * 2, // Max parallelism
             300_000L // 5 minute default timeout
         );
-        // this.iterativeExecutor = new IterativeStageExecutor(
-        //     agentFactory, promptEngine, variableSubstitution, null // Will be set when approval handler is configured
-        // );
     }
 
     /**
@@ -225,6 +258,8 @@ public class YamlWorkflowEngine implements WorkflowEngine {
             result.setErrorMessage("Execution failed: " + e.getMessage());
         } finally {
             result.setEndTime(System.currentTimeMillis());
+            // Clear completed stage results after workflow execution to prevent memory leak
+            completedStageResults.clear();
         }
 
         return result;
@@ -289,16 +324,30 @@ public class YamlWorkflowEngine implements WorkflowEngine {
 
     /**
      * Executes an iterative workflow stage.
+     * <p>
+     * NOTE: This is a simplified iterative implementation that executes the stage once.
+     * Full iterative functionality (parallel iterations, conditional loops, etc.) is planned for a future release.
+     * For now, iterative stages are executed as regular stages.
+     * </p>
+     *
+     * @param stage   the workflow stage with iteration configuration
+     * @param context the execution context
+     * @return the execution result
+     * @throws ConductorException if execution fails
      */
     private StageExecutionResult executeIterativeStage(WorkflowStage stage, WorkflowExecutionContext context)
             throws ConductorException {
-        logger.info("Executing iterative stage: {}", stage.getName());
+        logger.warn("Iterative stage '{}' detected. Full iterative functionality not yet implemented. " +
+                   "Executing as regular stage. Iteration config will be ignored.", stage.getName());
 
-        // Convert to IterativeWorkflowStage
-        IterativeWorkflowStage iterativeStage = convertToIterativeStage(stage);
-
-        // Iterative functionality temporarily disabled
-        throw new ConductorException("Iterative workflow functionality is temporarily disabled");
+        // For now, execute iterative stages as regular stages
+        // TODO: Implement full iterative functionality in future release
+        //  - Support for data-driven iterations
+        //  - Support for count-based iterations
+        //  - Support for conditional iterations
+        //  - Parallel iteration execution
+        //  - Per-iteration approval workflows
+        return executeRegularStage(stage, context);
     }
 
     /**
@@ -317,23 +366,36 @@ public class YamlWorkflowEngine implements WorkflowEngine {
                 throw new ConductorException("Stage '" + stage.getName() + "' has no agents defined");
             }
 
-            SubAgent primaryAgent = getOrCreateAgent(primaryAgentId);
+            // Build execution configuration for StageExecutor
+            int maxRetries = stage.getRetryLimit() != null ? stage.getRetryLimit() : 1;
+            StageExecutor.ExecutionConfig config = new StageExecutor.ExecutionConfig.Builder()
+                .stageName(stage.getName())
+                .maxRetries(maxRetries)
+                .enableAgentCaching(true)  // YamlWorkflowEngine uses agent caching
+                .taskMetadata(new HashMap<>())
+                .build();
 
-            // Prepare the prompt using context and template
-            String prompt = prepareStagePrompt(stage, primaryAgentId, context);
+            // Define agent creator callback - uses agent cache
+            StageExecutor.AgentCreator agentCreator = attempt -> getOrCreateAgent(primaryAgentId);
 
-            // Execute the agent
-            ExecutionInput executionInput = new ExecutionInput(prompt, null);
-            ExecutionResult executionResult = primaryAgent.execute(executionInput);
+            // Define prompt preparer callback
+            StageExecutor.PromptPreparer promptPreparer = (attempt, executionContext) ->
+                prepareStagePrompt(stage, primaryAgentId, context);
 
-            result.setAgentResponse(executionResult.output());
-            result.setSuccess(true);
+            // Execute stage using StageExecutor
+            Map<String, Object> executionContext = buildTemplateVariables(context);
+            StageExecutor.StageResult executorResult = stageExecutor.executeStage(
+                config, agentCreator, promptPreparer, executionContext);
+
+            // Convert StageExecutor.StageResult to StageExecutionResult
+            result.setAgentResponse(executorResult.getOutput());
+            result.setSuccess(executorResult.isSuccess());
 
             // If stage has a reviewer agent, execute review
             String reviewerAgentId = stage.getAgentId("reviewer");
             if (reviewerAgentId != null) {
                 SubAgent reviewerAgent = getOrCreateAgent(reviewerAgentId);
-                String reviewPrompt = prepareReviewPrompt(stage, reviewerAgentId, executionResult.output(), context);
+                String reviewPrompt = prepareReviewPrompt(stage, reviewerAgentId, executorResult.getOutput(), context);
 
                 ExecutionInput reviewInput = new ExecutionInput(reviewPrompt, null);
                 ExecutionResult reviewResult = reviewerAgent.execute(reviewInput);
@@ -460,7 +522,7 @@ public class YamlWorkflowEngine implements WorkflowEngine {
         }
 
         // Render the prompt using the template engine
-        return promptEngine.renderPrompt(template, variables);
+        return promptEngine.render(template, variables);
     }
 
     /**
@@ -477,7 +539,7 @@ public class YamlWorkflowEngine implements WorkflowEngine {
         Map<String, Object> variables = buildTemplateVariables(context);
         variables.put("content_to_review", contentToReview);
 
-        return promptEngine.renderPrompt(template, variables);
+        return promptEngine.render(template, variables);
     }
 
     /**
@@ -577,6 +639,73 @@ public class YamlWorkflowEngine implements WorkflowEngine {
         }
         if (orchestrator == null) {
             throw new IllegalStateException("Orchestrator not configured");
+        }
+
+        // Validate workflow definition correctness
+        validateWorkflowDefinition();
+    }
+
+    /**
+     * Validates the workflow definition for correctness.
+     * Checks stage dependencies, agent references, and other workflow constraints.
+     *
+     * @throws IllegalStateException if workflow validation fails
+     */
+    private void validateWorkflowDefinition() {
+        List<com.skanga.conductor.workflow.config.WorkflowStage> stages = workflowDefinition.getStages();
+
+        if (stages == null || stages.isEmpty()) {
+            throw new IllegalStateException("Workflow must contain at least one stage");
+        }
+
+        // Collect all stage names for dependency validation
+        Set<String> stageNames = new HashSet<>();
+        for (com.skanga.conductor.workflow.config.WorkflowStage stage : stages) {
+            if (stage.getName() == null || stage.getName().trim().isEmpty()) {
+                throw new IllegalStateException("All stages must have a name");
+            }
+            if (!stageNames.add(stage.getName())) {
+                throw new IllegalStateException("Duplicate stage name: " + stage.getName());
+            }
+        }
+
+        // Validate each stage
+        for (com.skanga.conductor.workflow.config.WorkflowStage stage : stages) {
+            // Check agent references
+            String primaryAgentId = stage.getPrimaryAgentId();
+            if (primaryAgentId == null || primaryAgentId.trim().isEmpty()) {
+                throw new IllegalStateException("Stage '" + stage.getName() + "' must have a primary agent");
+            }
+
+            // Validate agent exists in configuration
+            if (!agentConfig.getAgent(primaryAgentId).isPresent()) {
+                throw new IllegalStateException("Stage '" + stage.getName() +
+                    "' references unknown agent: " + primaryAgentId);
+            }
+
+            // Validate dependencies exist
+            List<String> dependencies = stage.getDependsOn();
+            if (dependencies != null) {
+                for (String dependency : dependencies) {
+                    if (!stageNames.contains(dependency)) {
+                        throw new IllegalStateException("Stage '" + stage.getName() +
+                            "' depends on non-existent stage: " + dependency);
+                    }
+                }
+            }
+
+            // Validate retry limit
+            if (stage.getRetryLimit() != null && stage.getRetryLimit() < 0) {
+                throw new IllegalStateException("Stage '" + stage.getName() +
+                    "' has invalid retry limit: " + stage.getRetryLimit());
+            }
+        }
+
+        // Check for circular dependencies using the existing StageExecutionPlan
+        try {
+            new StageExecutionPlan(stages);
+        } catch (Exception e) {
+            throw new IllegalStateException("Workflow has invalid dependency structure: " + e.getMessage(), e);
         }
     }
 

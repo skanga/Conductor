@@ -1,19 +1,23 @@
 package com.skanga.conductor.config;
 
 import com.skanga.conductor.exception.ConfigurationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Utility class for validating configuration values and providing validation feedback.
+ * Centralized configuration validator that validates all configuration settings.
  * <p>
- * This class provides static methods for validating common configuration patterns
- * and can be used by external components to validate configuration before
- * applying changes or during runtime configuration updates.
+ * This class provides both JSR-303 style validation through annotated getter methods
+ * and traditional validation methods for common configuration patterns.
  * </p>
  * <p>
  * The validator provides methods for:
  * </p>
  * <ul>
+ * <li>Complete ApplicationConfig validation</li>
  * <li>URL validation (HTTP/HTTPS, JDBC)</li>
  * <li>Numeric range validation</li>
  * <li>Duration validation</li>
@@ -21,14 +25,134 @@ import java.time.Duration;
  * <li>Sensitive data detection</li>
  * </ul>
  *
- * @since 1.0.0
+ * @since 2.0.0
  * @see ApplicationConfig
  * @see ConfigurationException
  */
 public final class ConfigurationValidator {
 
+    private static final Logger logger = LoggerFactory.getLogger(ConfigurationValidator.class);
+
     private ConfigurationValidator() {
         // Utility class - prevent instantiation
+    }
+
+    /**
+     * Validates an ApplicationConfig instance and all its nested configurations.
+     * <p>
+     * This method validates all configuration sections by invoking their getter methods,
+     * which contain validation logic through JSR-303 annotations and custom checks.
+     * </p>
+     *
+     * @param config the application configuration to validate
+     * @throws ConfigurationException if validation fails
+     */
+    public static void validate(ApplicationConfig config) {
+        List<String> errors = new ArrayList<>();
+
+        try {
+            // Validate database configuration
+            try {
+                DatabaseConfig dbConfig = config.getDatabaseConfig();
+                dbConfig.getJdbcUrl();
+                dbConfig.getDriver();
+                dbConfig.getMaxConnections();
+            } catch (IllegalArgumentException | ConfigurationException e) {
+                errors.add("Database: " + e.getMessage());
+            }
+
+            // Validate tool configuration
+            try {
+                ToolConfig toolConfig = config.getToolConfig();
+                toolConfig.getCodeRunnerTimeout();
+                toolConfig.getFileReadMaxSize();
+                toolConfig.getFileReadMaxPathLength();
+            } catch (IllegalArgumentException | ConfigurationException e) {
+                errors.add("Tool: " + e.getMessage());
+            }
+
+            // Validate LLM configuration
+            try {
+                LLMConfig llmConfig = config.getLLMConfig();
+                llmConfig.getRetryInitialDelay();
+                llmConfig.getRetryMaxDelay();
+                llmConfig.getRetryMultiplier();
+
+                // Validate provider configurations
+                validateProviderConfig(llmConfig.getProviderConfig("openai"), errors);
+                validateProviderConfig(llmConfig.getProviderConfig("anthropic"), errors);
+                validateProviderConfig(llmConfig.getProviderConfig("gemini"), errors);
+            } catch (IllegalArgumentException | ConfigurationException e) {
+                errors.add("LLM: " + e.getMessage());
+            }
+
+            // Validate memory configuration
+            try {
+                MemoryConfig memConfig = config.getMemoryConfig();
+                memConfig.getDefaultMemoryLimit();
+                memConfig.getMaxMemoryEntries();
+                memConfig.getMemoryRetentionDays();
+            } catch (IllegalArgumentException | ConfigurationException e) {
+                errors.add("Memory: " + e.getMessage());
+            }
+
+            // Validate metrics configuration
+            try {
+                MetricsConfig metricsConfig = config.getMetricsConfig();
+                metricsConfig.getRetentionPeriod();
+                metricsConfig.getMaxMetricsInMemory();
+                if (metricsConfig.isConsoleReportingEnabled()) {
+                    metricsConfig.getConsoleReportingInterval();
+                }
+                if (metricsConfig.isFileReportingEnabled()) {
+                    metricsConfig.getFileReportingInterval();
+                    metricsConfig.getOutputDirectory();
+                }
+            } catch (IllegalArgumentException | ConfigurationException e) {
+                errors.add("Metrics: " + e.getMessage());
+            }
+
+            // Validate parallelism configuration
+            try {
+                ParallelismConfig parConfig = config.getParallelismConfig();
+                parConfig.getMaxThreads();
+                parConfig.getMaxParallelTasksPerBatch();
+                parConfig.getTaskTimeoutSeconds();
+                parConfig.getBatchTimeoutSeconds();
+                parConfig.getMinTasksForParallelExecution();
+                parConfig.getParallelismThreshold();
+            } catch (IllegalArgumentException | ConfigurationException e) {
+                errors.add("Parallelism: " + e.getMessage());
+            }
+
+        } catch (Exception e) {
+            errors.add("Unexpected validation error: " + e.getMessage());
+        }
+
+        if (!errors.isEmpty()) {
+            String errorMessage = "Configuration validation failed:\n  - " + String.join("\n  - ", errors);
+            logger.error(errorMessage);
+            throw new ConfigurationException(errorMessage);
+        }
+
+        logger.info("Configuration validation successful");
+    }
+
+    /**
+     * Validates an LLM provider configuration.
+     *
+     * @param providerConfig the provider configuration to validate
+     * @param errors list to collect validation errors
+     */
+    private static void validateProviderConfig(LLMConfig.ProviderConfig providerConfig, List<String> errors) {
+        String providerName = providerConfig.getProviderName();
+        try {
+            providerConfig.getModel();
+            providerConfig.getTimeout();
+            providerConfig.getMaxRetries();
+        } catch (IllegalArgumentException | ConfigurationException e) {
+            errors.add("LLM Provider (" + providerName + "): " + e.getMessage());
+        }
     }
 
     /**

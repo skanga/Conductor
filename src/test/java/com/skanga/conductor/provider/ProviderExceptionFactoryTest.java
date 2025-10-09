@@ -48,7 +48,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.invalidApiKey(context, "Invalid format");
 
-        assertEquals(ErrorCodes.LLM_AUTH_INVALID_KEY, exception.getErrorCode());
+        assertEquals(ErrorCodes.AUTH_FAILED, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.AUTHENTICATION, exception.getErrorCategory());
         assertEquals("test-provider", exception.getProviderName());
         assertEquals("test-model", exception.getModelName());
@@ -61,7 +61,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.expiredApiKey(context, "Expired on 2024-01-01");
 
-        assertEquals(ErrorCodes.LLM_AUTH_EXPIRED_KEY, exception.getErrorCode());
+        assertEquals(ErrorCodes.AUTH_FAILED, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.AUTHENTICATION, exception.getErrorCategory());
         assertEquals("Expired on 2024-01-01", exception.getContext().getMetadata("expiration_info"));
     }
@@ -71,7 +71,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.missingApiKey(context);
 
-        assertEquals(ErrorCodes.LLM_AUTH_MISSING_KEY, exception.getErrorCode());
+        assertEquals(ErrorCodes.AUTH_FAILED, exception.getErrorCode());
         assertEquals("TEST-PROVIDER_API_KEY", exception.getContext().getMetadata("required_env_var"));
     }
 
@@ -80,7 +80,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.rateLimitExceeded(context, 120L);
 
-        assertEquals(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED, exception.getErrorCode());
+        assertEquals(ErrorCodes.RATE_LIMIT_EXCEEDED, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.RATE_LIMIT, exception.getErrorCategory());
         assertTrue(exception.isRetryable());
         assertEquals(Long.valueOf(120), exception.getRateLimitResetTime());
@@ -93,7 +93,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.quotaExceeded(context, "monthly_tokens");
 
-        assertEquals(ErrorCodes.LLM_RATE_QUOTA_EXCEEDED, exception.getErrorCode());
+        assertEquals(ErrorCodes.RATE_LIMIT_EXCEEDED, exception.getErrorCode());
         assertEquals("monthly_tokens", exception.getContext().getMetadata("quota_type"));
         assertFalse(exception.isRetryable()); // Quota exceeded requires user action
     }
@@ -103,7 +103,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.requestTimeout(context, 30000L);
 
-        assertEquals(ErrorCodes.LLM_TIMEOUT_REQUEST, exception.getErrorCode());
+        assertEquals(ErrorCodes.TIMEOUT, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.TIMEOUT, exception.getErrorCategory());
         assertTrue(exception.isRetryable());
         assertEquals(Long.valueOf(30000), exception.getContext().getMetadata("timeout_ms"));
@@ -115,7 +115,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.connectionTimeout(context, "https://api.openai.com");
 
-        assertEquals(ErrorCodes.LLM_TIMEOUT_CONNECTION, exception.getErrorCode());
+        assertEquals(ErrorCodes.TIMEOUT, exception.getErrorCode());
         assertEquals("https://api.openai.com", exception.getContext().getMetadata("endpoint"));
         assertTrue(exception.isRetryable());
     }
@@ -126,7 +126,7 @@ public class ProviderExceptionFactoryTest {
         RuntimeException cause = new RuntimeException("Connection refused");
         LLMProviderException exception = ProviderExceptionFactory.networkConnectionFailed(context, cause);
 
-        assertEquals(ErrorCodes.LLM_NETWORK_CONNECTION_FAILED, exception.getErrorCode());
+        assertEquals(ErrorCodes.NETWORK_ERROR, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.NETWORK, exception.getErrorCategory());
         assertEquals(cause, exception.getCause());
         assertTrue(exception.isRetryable());
@@ -137,7 +137,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.serviceUnavailable(context, 503);
 
-        assertEquals(ErrorCodes.LLM_SERVICE_UNAVAILABLE, exception.getErrorCode());
+        assertEquals(ErrorCodes.SERVICE_UNAVAILABLE, exception.getErrorCode());
         assertEquals(Integer.valueOf(503), exception.getHttpStatusCode());
         assertTrue(exception.isRetryable());
     }
@@ -147,7 +147,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.invalidRequestFormat(context, "Missing required field 'model'");
 
-        assertEquals(ErrorCodes.LLM_REQUEST_INVALID_FORMAT, exception.getErrorCode());
+        assertEquals(ErrorCodes.INVALID_FORMAT, exception.getErrorCode());
         assertEquals("Missing required field 'model'", exception.getContext().getMetadata("validation_error"));
         assertFalse(exception.isRetryable()); // Format errors are not retryable
     }
@@ -157,7 +157,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.requestTooLarge(context, 8192, 4096);
 
-        assertEquals(ErrorCodes.LLM_REQUEST_TOO_LARGE, exception.getErrorCode());
+        assertEquals(ErrorCodes.SIZE_EXCEEDED, exception.getErrorCode());
         assertEquals(Integer.valueOf(8192), exception.getContext().getMetadata("actual_size"));
         assertEquals(Integer.valueOf(4096), exception.getContext().getMetadata("max_size"));
         assertTrue(exception.getContext().getRecoveryDetails().contains("Reduce prompt size"));
@@ -168,7 +168,7 @@ public class ProviderExceptionFactoryTest {
         ProviderExceptionFactory.ProviderContext context = createTestContext();
         LLMProviderException exception = ProviderExceptionFactory.invalidModel(context, "gpt-3.5-turbo, gpt-4");
 
-        assertEquals(ErrorCodes.LLM_REQUEST_INVALID_MODEL, exception.getErrorCode());
+        assertEquals(ErrorCodes.NOT_FOUND, exception.getErrorCode());
         assertEquals("gpt-3.5-turbo, gpt-4", exception.getContext().getMetadata("available_models"));
         assertTrue(exception.getContext().getRecoveryDetails().contains("available models"));
     }
@@ -179,7 +179,7 @@ public class ProviderExceptionFactoryTest {
         TimeoutException timeoutException = new TimeoutException("Request timed out");
         LLMProviderException exception = ProviderExceptionFactory.fromException(context, timeoutException);
 
-        assertEquals(ErrorCodes.LLM_TIMEOUT_REQUEST, exception.getErrorCode());
+        assertEquals(ErrorCodes.TIMEOUT, exception.getErrorCode());
         assertTrue(exception.isRetryable());
     }
 
@@ -189,7 +189,7 @@ public class ProviderExceptionFactoryTest {
         RuntimeException connectionException = new RuntimeException("Connection refused");
         LLMProviderException exception = ProviderExceptionFactory.fromException(context, connectionException);
 
-        assertEquals(ErrorCodes.LLM_NETWORK_CONNECTION_FAILED, exception.getErrorCode());
+        assertEquals(ErrorCodes.NETWORK_ERROR, exception.getErrorCode());
         assertTrue(exception.isRetryable());
     }
 
@@ -199,7 +199,7 @@ public class ProviderExceptionFactoryTest {
         RuntimeException rateLimitException = new RuntimeException("Rate limit exceeded");
         LLMProviderException exception = ProviderExceptionFactory.fromException(context, rateLimitException);
 
-        assertEquals(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED, exception.getErrorCode());
+        assertEquals(ErrorCodes.RATE_LIMIT_EXCEEDED, exception.getErrorCode());
         assertTrue(exception.isRetryable());
     }
 
@@ -209,7 +209,7 @@ public class ProviderExceptionFactoryTest {
         RuntimeException authException = new RuntimeException("Authentication failed - 401 Unauthorized");
         LLMProviderException exception = ProviderExceptionFactory.fromException(context, authException);
 
-        assertEquals(ErrorCodes.LLM_AUTH_INVALID_KEY, exception.getErrorCode());
+        assertEquals(ErrorCodes.AUTH_FAILED, exception.getErrorCode());
         assertFalse(exception.isRetryable());
     }
 
@@ -219,7 +219,7 @@ public class ProviderExceptionFactoryTest {
         RuntimeException genericException = new RuntimeException("Unknown error");
         LLMProviderException exception = ProviderExceptionFactory.fromException(context, genericException);
 
-        assertEquals(ErrorCodes.LLM_SERVICE_UNAVAILABLE, exception.getErrorCode());
+        assertEquals(ErrorCodes.SERVICE_UNAVAILABLE, exception.getErrorCode());
         assertEquals(genericException, exception.getCause());
         assertTrue(exception.isRetryable());
     }
@@ -238,7 +238,7 @@ public class ProviderExceptionFactoryTest {
         LLMProviderException exception = ProviderExceptionFactory.rateLimitExceeded(context, 60);
 
         String message = exception.getMessage();
-        assertTrue(message.contains("LLM_RATE_LIMIT_EXCEEDED"));
+        assertTrue(message.contains("RATE_LIMIT_EXCEEDED"));
         assertTrue(message.contains("generate_completion"));
         assertTrue(message.contains("2/3")); // attempt information
     }

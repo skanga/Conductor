@@ -1,4 +1,6 @@
 package com.skanga.conductor.workflow.templates;
+import com.skanga.conductor.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.TemplateException;
 
 import com.skanga.conductor.workflow.config.AgentConfigCollection;
 import org.junit.jupiter.api.BeforeEach;
@@ -399,25 +401,25 @@ class PromptTemplateEngineEnhancedTest {
         @Test
         @DisplayName("Should reject templates with unbalanced braces")
         void shouldRejectTemplatesWithUnbalancedBraces() {
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("{{name}"));
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("name}}"));
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("{{name}} and {missing}"));
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("{{name}}}}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("{{name}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("name}}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("{{name}} and {missing}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("{{name}}}}"));
         }
 
         @Test
         @DisplayName("Should reject templates with empty variable names")
         void shouldRejectTemplatesWithEmptyVariableNames() {
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("{{}}"));
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("{{  }}"));
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("{{name}} and {{}}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("{{}}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("{{  }}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("{{name}} and {{}}"));
         }
 
         @Test
         @DisplayName("Should reject templates with single braces")
         void shouldRejectTemplatesWithSingleBraces() {
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("This has {single} braces"));
-            assertThrows(IllegalArgumentException.class, () -> engine.validateTemplate("Mixed {{double}} and {single}"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("This has {single} braces"));
+            assertThrows(TemplateException.class, () -> engine.validateTemplate("Mixed {{double}} and {single}"));
         }
     }
 

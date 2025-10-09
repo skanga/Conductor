@@ -159,7 +159,7 @@ public final class ProviderExceptionFactory {
      * Creates an authentication exception for invalid API keys.
      */
     public static LLMProviderException invalidApiKey(ProviderContext context, String keyInfo) {
-        return (LLMProviderException) createBaseBuilder("Invalid API key", ErrorCodes.LLM_AUTH_INVALID_KEY, context)
+        return (LLMProviderException) createBaseBuilder("Invalid API key", ErrorCodes.AUTH_FAILED, context)
                 .metadata("key_info", keyInfo)
                 .checkCredentials()
                 .build();
@@ -169,7 +169,7 @@ public final class ProviderExceptionFactory {
      * Creates an authentication exception for expired API keys.
      */
     public static LLMProviderException expiredApiKey(ProviderContext context, String expirationInfo) {
-        return (LLMProviderException) createBaseBuilder("API key has expired", ErrorCodes.LLM_AUTH_EXPIRED_KEY, context)
+        return (LLMProviderException) createBaseBuilder("API key has expired", ErrorCodes.AUTH_FAILED, context)
                 .metadata("expiration_info", expirationInfo)
                 .checkCredentials()
                 .build();
@@ -180,7 +180,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException missingApiKey(ProviderContext context) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("API key is missing")
-                .errorCode(ErrorCodes.LLM_AUTH_MISSING_KEY)
+                .errorCode(ErrorCodes.AUTH_FAILED)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("required_env_var", context.getProviderName().toUpperCase() + "_API_KEY")
@@ -193,7 +193,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException insufficientPermissions(ProviderContext context, String resource) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("Insufficient permissions")
-                .errorCode(ErrorCodes.LLM_AUTH_INSUFFICIENT_PERMISSIONS)
+                .errorCode(ErrorCodes.AUTH_FAILED)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("required_resource", resource)
@@ -207,7 +207,7 @@ public final class ProviderExceptionFactory {
      * Creates a rate limit exception for exceeded request limits.
      */
     public static LLMProviderException rateLimitExceeded(ProviderContext context, long resetTimeSeconds) {
-        return (LLMProviderException) createBaseBuilder("Rate limit exceeded", ErrorCodes.LLM_RATE_LIMIT_EXCEEDED, context)
+        return (LLMProviderException) createBaseBuilder("Rate limit exceeded", ErrorCodes.RATE_LIMIT_EXCEEDED, context)
                 .rateLimitReset(resetTimeSeconds)
                 .metadata("retry_after_seconds", resetTimeSeconds)
                 .retryWithBackoff()
@@ -220,7 +220,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException quotaExceeded(ProviderContext context, String quotaType) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("Quota exceeded")
-                .errorCode(ErrorCodes.LLM_RATE_QUOTA_EXCEEDED)
+                .errorCode(ErrorCodes.RATE_LIMIT_EXCEEDED)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("quota_type", quotaType)
@@ -235,7 +235,7 @@ public final class ProviderExceptionFactory {
      * Creates a request timeout exception.
      */
     public static LLMProviderException requestTimeout(ProviderContext context, long timeoutMs) {
-        return (LLMProviderException) createBaseBuilder("Request timeout", ErrorCodes.LLM_TIMEOUT_REQUEST, context)
+        return (LLMProviderException) createBaseBuilder("Request timeout", ErrorCodes.TIMEOUT, context)
                 .metadata("timeout_ms", timeoutMs)
                 .retryWithBackoff()
                 .recoveryDetails("Consider increasing timeout or reducing prompt size")
@@ -247,7 +247,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException connectionTimeout(ProviderContext context, String endpoint) {
         ExceptionBuilder builder = ExceptionBuilder.llmProvider("Connection timeout")
-                .errorCode(ErrorCodes.LLM_TIMEOUT_CONNECTION)
+                .errorCode(ErrorCodes.TIMEOUT)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .correlationId(context.getCorrelationId())
@@ -267,7 +267,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException networkConnectionFailed(ProviderContext context, Throwable cause) {
         ExceptionBuilder builder = ExceptionBuilder.llmProvider("Network connection failed")
-                .errorCode(ErrorCodes.LLM_NETWORK_CONNECTION_FAILED)
+                .errorCode(ErrorCodes.NETWORK_ERROR)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .correlationId(context.getCorrelationId())
@@ -285,7 +285,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException dnsResolutionFailed(ProviderContext context, String hostname) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("DNS resolution failed")
-                .errorCode(ErrorCodes.LLM_NETWORK_DNS_RESOLUTION)
+                .errorCode(ErrorCodes.NETWORK_ERROR)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("hostname", hostname)
@@ -301,7 +301,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException serviceUnavailable(ProviderContext context, int httpStatus) {
         ExceptionBuilder builder = ExceptionBuilder.llmProvider("Service unavailable")
-                .errorCode(ErrorCodes.LLM_SERVICE_UNAVAILABLE)
+                .errorCode(ErrorCodes.SERVICE_UNAVAILABLE)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .correlationId(context.getCorrelationId())
@@ -319,7 +319,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException serviceMaintenance(ProviderContext context, String maintenanceWindow) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("Service under maintenance")
-                .errorCode(ErrorCodes.LLM_SERVICE_MAINTENANCE)
+                .errorCode(ErrorCodes.SERVICE_UNAVAILABLE)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("maintenance_window", maintenanceWindow)
@@ -335,7 +335,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException invalidRequestFormat(ProviderContext context, String validationError) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("Invalid request format")
-                .errorCode(ErrorCodes.LLM_REQUEST_INVALID_FORMAT)
+                .errorCode(ErrorCodes.INVALID_FORMAT)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("validation_error", validationError)
@@ -349,7 +349,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException requestTooLarge(ProviderContext context, int actualSize, int maxSize) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("Request too large")
-                .errorCode(ErrorCodes.LLM_REQUEST_TOO_LARGE)
+                .errorCode(ErrorCodes.SIZE_EXCEEDED)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("actual_size", actualSize)
@@ -364,7 +364,7 @@ public final class ProviderExceptionFactory {
      */
     public static LLMProviderException invalidModel(ProviderContext context, String availableModels) {
         return (LLMProviderException) ExceptionBuilder.llmProvider("Invalid model specified")
-                .errorCode(ErrorCodes.LLM_REQUEST_INVALID_MODEL)
+                .errorCode(ErrorCodes.NOT_FOUND)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .metadata("available_models", availableModels)
@@ -382,7 +382,12 @@ public final class ProviderExceptionFactory {
         if (exception instanceof TimeoutException ||
             message.contains("timeout") ||
             className.contains("timeout")) {
-            return requestTimeout(context, context.getDuration() != null ? context.getDuration() : 30000);
+            ExceptionBuilder builder = createBaseBuilder("Request timeout", ErrorCodes.TIMEOUT, context)
+                    .metadata("timeout_ms", context.getDuration() != null ? context.getDuration() : 30000)
+                    .cause(exception)
+                    .retryWithBackoff()
+                    .recoveryDetails("Consider increasing timeout or reducing prompt size");
+            return (LLMProviderException) builder.build();
         }
 
         // Network exceptions
@@ -396,14 +401,25 @@ public final class ProviderExceptionFactory {
         if (message.contains("rate limit") ||
             message.contains("too many requests") ||
             message.contains("429")) {
-            return rateLimitExceeded(context, 60); // Default 60 seconds
+            long resetTimeSeconds = 60; // Default 60 seconds
+            ExceptionBuilder builder = createBaseBuilder("Rate limit exceeded", ErrorCodes.RATE_LIMIT_EXCEEDED, context)
+                    .rateLimitReset(resetTimeSeconds)
+                    .metadata("retry_after_seconds", resetTimeSeconds)
+                    .cause(exception)
+                    .retryWithBackoff()
+                    .recoveryDetails("Wait " + resetTimeSeconds + " seconds before retrying");
+            return (LLMProviderException) builder.build();
         }
 
         // Authentication exceptions
         if (message.contains("authentication") ||
             message.contains("unauthorized") ||
             message.contains("401")) {
-            return invalidApiKey(context, "Check API key validity");
+            ExceptionBuilder builder = createBaseBuilder("Invalid API key", ErrorCodes.AUTH_FAILED, context)
+                    .metadata("key_info", "Check API key validity")
+                    .cause(exception)
+                    .checkCredentials();
+            return (LLMProviderException) builder.build();
         }
 
         // Service unavailable
@@ -411,12 +427,23 @@ public final class ProviderExceptionFactory {
             message.contains("503") ||
             message.contains("502") ||
             message.contains("504")) {
-            return serviceUnavailable(context, 503);
+            int httpStatus = 503;
+            ExceptionBuilder builder = ExceptionBuilder.llmProvider("Service unavailable")
+                    .errorCode(ErrorCodes.SERVICE_UNAVAILABLE)
+                    .operation(context.getOperation())
+                    .provider(context.getProviderName(), context.getModelName())
+                    .correlationId(context.getCorrelationId())
+                    .httpStatus(httpStatus)
+                    .cause(exception)
+                    .retryWithBackoff();
+            builder = addDuration(builder, context);
+            builder = addAttemptInfo(builder, context);
+            return (LLMProviderException) builder.build();
         }
 
         // Generic provider exception with enhanced context
         ExceptionBuilder builder = ExceptionBuilder.llmProvider(exception.getMessage())
-                .errorCode(ErrorCodes.LLM_SERVICE_UNAVAILABLE)
+                .errorCode(ErrorCodes.SERVICE_UNAVAILABLE)
                 .operation(context.getOperation())
                 .provider(context.getProviderName(), context.getModelName())
                 .correlationId(context.getCorrelationId())

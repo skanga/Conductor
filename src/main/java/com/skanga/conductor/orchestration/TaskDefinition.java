@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * </ul>
  *
  * @since 1.0.0
- * @see LLMPlanMaker
+ * @see LLMPlanner
  * @see PlannerOrchestrator
  */
 public class TaskDefinition {

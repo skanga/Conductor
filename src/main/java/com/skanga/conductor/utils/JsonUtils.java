@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -41,14 +44,80 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public final class JsonUtils {
 
+    private static final Logger logger = LoggerFactory.getLogger(JsonUtils.class);
+
     /**
-     * Shared ObjectMapper instance configured for optimal performance and compatibility.
+     * Shared ObjectMapper instance configured for optimal performance and security.
      * <p>
      * The ObjectMapper is thread-safe and can be shared across the application.
-     * It's configured with sensible defaults for the Conductor framework.
+     * It's configured with security-hardened defaults for the Conductor framework:
      * </p>
+     * <ul>
+     * <li>Polymorphic type handling with whitelist validation</li>
+     * <li>Safe deserialization preventing arbitrary code execution</li>
+     * <li>Only allows trusted base types and Conductor framework classes</li>
+     * </ul>
      */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = createSecureObjectMapper();
+
+    /**
+     * Creates a security-hardened ObjectMapper with safe deserialization settings.
+     * <p>
+     * This configuration prevents unsafe deserialization attacks by:
+     * </p>
+     * <ul>
+     * <li>Using BasicPolymorphicTypeValidator to whitelist allowed base types</li>
+     * <li>Only allowing classes from com.skanga.conductor package</li>
+     * <li>Allowing common safe base types (String, Number, Boolean, etc.)</li>
+     * <li>Blocking dangerous classes like Object, Serializable, Comparable</li>
+     * </ul>
+     * <p>
+     * Note: Default typing is NOT enabled by default to maintain JSON compatibility.
+     * Type validation is enforced only when deserialization occurs with known types.
+     * For polymorphic deserialization needs, use the dedicated type-safe methods.
+     * </p>
+     *
+     * @return configured ObjectMapper with security settings
+     */
+    private static ObjectMapper createSecureObjectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        // Create a polymorphic type validator that allows only safe base types
+        // and classes from our framework package
+        // This validator is used when type information is present in JSON,
+        // but we don't activate it globally to avoid breaking existing JSON format
+        BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                // Allow primitives and common safe types
+                .allowIfBaseType(String.class)
+                .allowIfBaseType(Number.class)
+                .allowIfBaseType(Boolean.class)
+                .allowIfBaseType(java.util.Date.class)
+                .allowIfBaseType(java.time.Instant.class)
+                .allowIfBaseType(java.time.LocalDateTime.class)
+                .allowIfBaseType(java.time.LocalDate.class)
+                .allowIfBaseType(java.util.UUID.class)
+                // Allow collections with safe generic types
+                .allowIfBaseType(java.util.List.class)
+                .allowIfBaseType(java.util.Map.class)
+                .allowIfBaseType(java.util.Set.class)
+                // Allow our framework classes
+                .allowIfSubTypeIsArray()
+                .allowIfSubType("com.skanga.conductor.")
+                .build();
+
+        // Set the validator for type resolution
+        // This provides protection when @JsonTypeInfo is used in classes
+        mapper.setPolymorphicTypeValidator(ptv);
+
+        // SECURITY: Do NOT activate default typing globally as it changes JSON format
+        // and breaks compatibility. Instead, rely on:
+        // 1. Explicit type references in fromJson() methods
+        // 2. @JsonTypeInfo annotations on specific classes that need polymorphism
+        // 3. The type validator above to block dangerous types
+
+        logger.debug("Initialized secure ObjectMapper with polymorphic type validation (default typing disabled for compatibility)");
+        return mapper;
+    }
 
     // Private constructor to prevent instantiation
     private JsonUtils() {

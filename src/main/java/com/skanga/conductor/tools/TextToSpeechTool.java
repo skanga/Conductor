@@ -1,6 +1,7 @@
 package com.skanga.conductor.tools;
 
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.config.ToolConfig;
 import com.skanga.conductor.execution.ExecutionInput;
 import com.skanga.conductor.execution.ExecutionResult;
 
@@ -99,7 +100,7 @@ public class TextToSpeechTool implements Tool {
      * </p>
      */
     public TextToSpeechTool() {
-        ApplicationConfig.ToolConfig config = ApplicationConfig.getInstance().getToolConfig();
+        ToolConfig config = ApplicationConfig.getInstance().getToolConfig();
         this.outDir = Paths.get(config.getAudioOutputDir());
     }
 
@@ -448,12 +449,14 @@ public class TextToSpeechTool implements Tool {
         String text = input.content();
         if (text != null) {
             // Check for extremely long text that could cause resource exhaustion
-            if (text.length() > 10000) {
-                return ValidationResult.invalid("Input text is too long (max 10,000 characters)");
+            int maxLength = getMaxTextLength();
+            if (text.length() > maxLength) {
+                return ValidationResult.invalid(String.format("Input text is too long (max %,d characters)", maxLength));
             }
 
             // Check for control characters that might cause issues
-            for (char c : text.toCharArray()) {
+            for (int i = 0; i < Math.min(text.length(), 1000); i++) {
+                char c = text.charAt(i);
                 if (Character.isISOControl(c) && c != '\t' && c != '\n' && c != '\r') {
                     return ValidationResult.invalid("Input text contains invalid control characters");
                 }
@@ -461,6 +464,18 @@ public class TextToSpeechTool implements Tool {
         }
 
         return ValidationResult.valid();
+    }
+
+    /**
+     * Gets the maximum text length from configuration.
+     */
+    private int getMaxTextLength() {
+        try {
+            return ApplicationConfig.getInstance().getToolConfig().getTtsMaxTextLength();
+        } catch (Exception e) {
+            // Fallback if config is not available
+            return 10000;
+        }
     }
 
     /**

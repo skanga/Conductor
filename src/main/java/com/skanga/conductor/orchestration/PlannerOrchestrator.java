@@ -3,7 +3,7 @@ package com.skanga.conductor.orchestration;
 import com.skanga.conductor.config.ApplicationConfig;
 import com.skanga.conductor.exception.ConductorException;
 import com.skanga.conductor.memory.MemoryStore;
-import com.skanga.conductor.workflow.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 import com.skanga.conductor.utils.ValidationUtils;
 import com.skanga.conductor.agent.SubAgent;
 import com.skanga.conductor.agent.SubAgentRegistry;
@@ -17,6 +17,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Function;
+import com.skanga.conductor.config.ParallelismConfig;
 
 /**
  * Orchestrator that uses an LLM-based planner to decompose the user request into tasks,
@@ -47,7 +48,7 @@ public class PlannerOrchestrator extends Orchestrator {
     private final PromptTemplateEngine templateEngine;
     private final TaskDependencyAnalyzer dependencyAnalyzer;
     private final ParallelTaskExecutor parallelExecutor;
-    private final ApplicationConfig.ParallelismConfig parallelismConfig;
+    private final ParallelismConfig parallelismConfig;
 
     public PlannerOrchestrator(SubAgentRegistry registry, MemoryStore memoryStore) {
         super(registry, memoryStore);
@@ -134,7 +135,7 @@ public class PlannerOrchestrator extends Orchestrator {
         validateWorkflowParamsWithProviders(workflowId, userRequest, workerProvider, memoryStore);
         ValidationUtils.requireNonNull(plannerProvider, "planner provider");
 
-        LLMPlanMaker planner = new LLMPlanMaker(plannerProvider);
+        LLMPlanner planner = new LLMPlanner(plannerProvider);
         TaskDefinition[] plan = planner.plan(userRequest);
 
         // Save plan for resumability
@@ -308,7 +309,7 @@ public class PlannerOrchestrator extends Orchestrator {
             }
 
             // Use PromptTemplateEngine for consistent templating
-            String agentPrompt = templateEngine.renderString(td.promptTemplate, templateVars);
+            String agentPrompt = templateEngine.render(td.promptTemplate, templateVars);
 
             ExecutionResult res = agent.execute(new ExecutionInput(agentPrompt, null));
             results.add(res);

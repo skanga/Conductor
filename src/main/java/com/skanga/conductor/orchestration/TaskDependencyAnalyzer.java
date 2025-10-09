@@ -1,6 +1,6 @@
 package com.skanga.conductor.orchestration;
 
-import com.skanga.conductor.workflow.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

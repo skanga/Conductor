@@ -1,6 +1,7 @@
 package com.skanga.conductor.tools;
 
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.config.ToolConfig;
 import com.skanga.conductor.execution.ExecutionInput;
 import com.skanga.conductor.execution.ExecutionResult;
 
@@ -55,7 +56,7 @@ public class CodeRunnerTool implements Tool {
      * Creates a new CodeRunnerTool with configuration from ApplicationConfig.
      */
     public CodeRunnerTool() {
-        ApplicationConfig.ToolConfig config = ApplicationConfig.getInstance().getToolConfig();
+        ToolConfig config = ApplicationConfig.getInstance().getToolConfig();
         this.timeout = config.getCodeRunnerTimeout();
         this.allowedCommands = config.getCodeRunnerAllowedCommands();
     }
@@ -164,7 +165,10 @@ public class CodeRunnerTool implements Tool {
         if (commandArgs.isEmpty()) {
             return ValidationResult.invalid("Command arguments cannot be empty");
         }
+
         String executable = commandArgs.get(0);
+
+        // Block dangerous commands
         Set<String> blockedCommands = Set.of(
                 "rm", "del", "format", "fdisk", "mkfs", "dd",
                 "shutdown", "reboot", "halt", "poweroff",
@@ -174,18 +178,36 @@ public class CodeRunnerTool implements Tool {
         if (blockedCommands.contains(executable.toLowerCase())) {
             return ValidationResult.invalid("Dangerous command blocked: " + executable);
         }
-        if (executable.contains("..") || executable.contains("/") || executable.contains("\\")) {
-            return ValidationResult.invalid("Executable path contains suspicious characters: " + executable);
+
+        // Validate executable path - only block path traversal
+        if (executable.contains("..")) {
+            return ValidationResult.invalid("Executable path contains path traversal (..)");
         }
+
+        // Limit number of arguments
         if (commandArgs.size() > 100) {
             return ValidationResult.invalid("Too many command arguments (max 100)");
         }
-        for (String arg : commandArgs) {
+
+        // Validate each argument for length and dangerous patterns
+        for (int i = 0; i < commandArgs.size(); i++) {
+            String arg = commandArgs.get(i);
+
             if (arg.length() > 2048) {
                 return ValidationResult.invalid("Command argument too long (max 2048 characters)");
             }
-            // special characters allowed
+
+            // Check for null bytes which are always dangerous
+            if (arg.indexOf('\0') >= 0) {
+                return ValidationResult.invalid("Command argument contains null byte");
+            }
+
+            // Check for newlines which could be used for command chaining in some shells
+            if (arg.contains("\n") || arg.contains("\r")) {
+                return ValidationResult.invalid("Command argument contains newline characters");
+            }
         }
+
         return ValidationResult.valid();
     }
 

@@ -18,6 +18,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.sql.DataSource;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.skanga.conductor.config.MemoryConfig;
+import com.skanga.conductor.config.DatabaseConfig;
 
 /**
  * Thread-safe JDBC-backed memory store for subagents.
@@ -47,14 +51,16 @@ import org.h2.jdbcx.JdbcConnectionPool;
  */
 public class MemoryStore implements AutoCloseable {
 
+    private static final Logger logger = LoggerFactory.getLogger(MemoryStore.class);
+
     private final DataSource dataSource;
-    private final ApplicationConfig.MemoryConfig memoryConfig;
+    private final MemoryConfig memoryConfig;
     private final ReadWriteLock schemaLock = new ReentrantReadWriteLock();
     private volatile boolean schemaInitialized = false;
 
     public MemoryStore() throws SQLException {
         ApplicationConfig config = ApplicationConfig.getInstance();
-        ApplicationConfig.DatabaseConfig dbConfig = config.getDatabaseConfig();
+        DatabaseConfig dbConfig = config.getDatabaseConfig();
         this.memoryConfig = config.getMemoryConfig();
 
         // Create connection pool for thread safety
@@ -127,6 +133,20 @@ public class MemoryStore implements AutoCloseable {
         }
     }
 
+    /**
+     * Adds a memory entry for the specified agent.
+     * <p>
+     * Memory entries are timestamped and stored in chronological order. They can be
+     * retrieved later using {@link #loadMemory(String)} or {@link #loadMemory(String, int)}.
+     * This method is thread-safe and can be called concurrently from multiple threads.
+     * </p>
+     *
+     * @param agentName the name of the agent to add memory for (must not be null)
+     * @param content the memory content to store (must not be null)
+     * @throws SQLException if database operation fails
+     * @see #loadMemory(String)
+     * @see #loadMemory(String, int)
+     */
     public void addMemory(String agentName, String content) throws SQLException {
         String insert = "INSERT INTO subagent_memory (agent_name, created_at, content) VALUES (?, ?, ?)";
         try (Connection conn = dataSource.getConnection();
@@ -138,6 +158,21 @@ public class MemoryStore implements AutoCloseable {
         }
     }
 
+    /**
+     * Loads memory entries for the specified agent with a maximum entry limit.
+     * <p>
+     * Entries are returned in chronological order (oldest first). This method is
+     * thread-safe and can be called concurrently. An independent database connection
+     * is obtained for each call, allowing concurrent reads without blocking.
+     * </p>
+     *
+     * @param agentName the name of the agent to load memory for (must not be null)
+     * @param limit the maximum number of memory entries to retrieve (must be >= 0)
+     * @return a list of memory content strings in chronological order (never null)
+     * @throws SQLException if database operation fails
+     * @see #loadMemory(String)
+     * @see #addMemory(String, String)
+     */
     public List<String> loadMemory(String agentName, int limit) throws SQLException {
         String q = "SELECT content FROM subagent_memory WHERE agent_name = ? ORDER BY id ASC LIMIT ?";
         List<String> out = new ArrayList<>();
@@ -155,6 +190,19 @@ public class MemoryStore implements AutoCloseable {
         return out;
     }
 
+    /**
+     * Loads memory entries for the specified agent using the configured maximum limit.
+     * <p>
+     * This is a convenience method that delegates to {@link #loadMemory(String, int)}
+     * using the limit from {@code conductor.memory.max-entries} configuration.
+     * </p>
+     *
+     * @param agentName the name of the agent to load memory for (must not be null)
+     * @return a list of memory content strings in chronological order (never null)
+     * @throws SQLException if database operation fails
+     * @see #loadMemory(String, int)
+     * @see MemoryConfig#getMaxMemoryEntries()
+     */
     public List<String> loadMemory(String agentName) throws SQLException {
         return loadMemory(agentName, memoryConfig.getMaxMemoryEntries());
     }
@@ -171,6 +219,16 @@ public class MemoryStore implements AutoCloseable {
     public Map<String, List<String>> loadMemoryBulk(List<String> agentNames, int limit) throws SQLException {
         if (agentNames == null || agentNames.isEmpty()) {
             return new HashMap<>();
+        }
+
+        // Validate agent names as defense-in-depth (even though we use parameterized queries)
+        for (String agentName : agentNames) {
+            if (agentName == null || agentName.isBlank()) {
+                throw new IllegalArgumentException("Agent name cannot be null or blank");
+            }
+            if (agentName.length() > 255) {
+                throw new IllegalArgumentException("Agent name too long: " + agentName.length() + " characters");
+            }
         }
 
         Map<String, List<String>> result = new HashMap<>();
@@ -229,6 +287,20 @@ public class MemoryStore implements AutoCloseable {
         return loadMemoryBulk(agentNames, memoryConfig.getMaxMemoryEntries());
     }
 
+    /**
+     * Saves or updates the output of a workflow task.
+     * <p>
+     * Uses a MERGE (upsert) operation to either insert a new task output or update
+     * an existing one if the workflow ID and task name combination already exists.
+     * This allows tasks to be re-executed with their outputs updated in place.
+     * </p>
+     *
+     * @param workflowId the unique identifier for the workflow (must not be null)
+     * @param taskName the name of the task within the workflow (must not be null)
+     * @param output the output produced by the task execution
+     * @throws ConductorException.MemoryStoreException if database operation fails
+     * @see #loadTaskOutputs(String)
+     */
     public void saveTaskOutput(String workflowId, String taskName, String output) {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
@@ -242,6 +314,18 @@ public class MemoryStore implements AutoCloseable {
         }
     }
 
+    /**
+     * Loads all task outputs for a specific workflow.
+     * <p>
+     * Returns a map where keys are task names and values are their corresponding outputs.
+     * If no outputs exist for the given workflow ID, an empty map is returned.
+     * </p>
+     *
+     * @param workflowId the unique identifier for the workflow (must not be null)
+     * @return a map of task names to their outputs (never null, may be empty)
+     * @throws ConductorException.MemoryStoreException if database operation fails
+     * @see #saveTaskOutput(String, String, String)
+     */
     public Map<String, String> loadTaskOutputs(String workflowId) {
         Map<String, String> results = new HashMap<>();
         try (Connection conn = dataSource.getConnection();
@@ -259,6 +343,21 @@ public class MemoryStore implements AutoCloseable {
         return results;
     }
 
+    /**
+     * Saves or updates a workflow execution plan.
+     * <p>
+     * The plan is serialized to JSON and stored in the database. Uses a MERGE (upsert)
+     * operation so subsequent calls with the same workflow ID will update the existing plan.
+     * This is useful for LLM-based planning systems that decompose high-level goals into
+     * executable task sequences.
+     * </p>
+     *
+     * @param workflowId the unique identifier for the workflow (must not be null)
+     * @param plan the array of task definitions representing the execution plan (must not be null)
+     * @throws SQLException if database operation or JSON serialization fails
+     * @see #loadPlan(String)
+     * @see TaskDefinition
+     */
     public void savePlan(String workflowId, TaskDefinition[] plan) throws SQLException {
         // Use H2's MERGE syntax instead of MySQL's ON DUPLICATE KEY UPDATE
         try (Connection conn = dataSource.getConnection();
@@ -270,6 +369,20 @@ public class MemoryStore implements AutoCloseable {
         }
     }
 
+    /**
+     * Loads a previously saved workflow execution plan.
+     * <p>
+     * Retrieves the plan from the database and deserializes it from JSON back into
+     * task definitions. Returns an empty Optional if no plan exists for the given
+     * workflow ID.
+     * </p>
+     *
+     * @param workflowId the unique identifier for the workflow (must not be null)
+     * @return an Optional containing the plan array if found, or empty if no plan exists
+     * @throws SQLException if database operation or JSON deserialization fails
+     * @see #savePlan(String, TaskDefinition[])
+     * @see TaskDefinition
+     */
     public Optional<TaskDefinition[]> loadPlan(String workflowId) throws SQLException {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
@@ -288,8 +401,50 @@ public class MemoryStore implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        if (dataSource instanceof JdbcConnectionPool) {
-            ((JdbcConnectionPool) dataSource).dispose();
+        if (dataSource == null) {
+            return;
         }
+
+        if (dataSource instanceof JdbcConnectionPool pool) {
+            pool.dispose();
+            logger.debug("Disposed JdbcConnectionPool");
+        } else if (dataSource instanceof AutoCloseable closeable) {
+            // Handle other AutoCloseable DataSource implementations
+            closeable.close();
+            logger.debug("Closed AutoCloseable DataSource: {}", dataSource.getClass().getName());
+        } else {
+            // Last resort: try reflective cleanup for common DataSource implementations
+            tryReflectiveCleanup(dataSource);
+        }
+    }
+
+    /**
+     * Attempts to close a DataSource using reflection when it doesn't implement AutoCloseable.
+     * This handles common connection pool implementations that have close/shutdown methods.
+     *
+     * @param ds the DataSource to close
+     */
+    private void tryReflectiveCleanup(DataSource ds) {
+        String className = ds.getClass().getName();
+        logger.warn("DataSource {} does not implement AutoCloseable, attempting reflective cleanup", className);
+
+        // Try common method names used by connection pools
+        String[] methodNames = {"close", "shutdown", "dispose"};
+
+        for (String methodName : methodNames) {
+            try {
+                var method = ds.getClass().getMethod(methodName);
+                method.invoke(ds);
+                logger.info("Successfully closed DataSource using reflective method: {}", methodName);
+                return;
+            } catch (NoSuchMethodException e) {
+                // Method doesn't exist, try next one
+                continue;
+            } catch (Exception e) {
+                logger.warn("Failed to invoke {} on DataSource: {}", methodName, e.getMessage());
+            }
+        }
+
+        logger.error("Unable to close DataSource of type {}. Potential resource leak!", className);
     }
 }

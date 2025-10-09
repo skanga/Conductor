@@ -8,7 +8,7 @@ import com.skanga.conductor.orchestration.Orchestrator;
 import com.skanga.conductor.provider.LLMProvider;
 import com.skanga.conductor.workflow.config.WorkflowContext;
 import com.skanga.conductor.workflow.config.WorkflowDefinition;
-import com.skanga.conductor.workflow.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;

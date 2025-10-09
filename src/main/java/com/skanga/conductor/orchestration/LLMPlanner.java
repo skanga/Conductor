@@ -15,11 +15,11 @@ import com.skanga.conductor.provider.LLMProvider;
  * <p>
  * The prompt we send asks the model to reply ONLY with JSON.
  */
-public class LLMPlanMaker {
+public class LLMPlanner {
 
     private final LLMProvider plannerLLM;
 
-    public LLMPlanMaker(LLMProvider plannerLLM) {
+    public LLMPlanner(LLMProvider plannerLLM) {
         if (plannerLLM == null) {
             throw new IllegalArgumentException("plannerLLM cannot be null");
         }

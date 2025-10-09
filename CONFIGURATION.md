@@ -293,7 +293,20 @@ Configuration precedence (highest to lowest):
 |----------|---------|-------------|
 | `conductor.memory.default.limit` | `10` | Default memory entries shown in prompts |
 | `conductor.memory.max.entries` | `1000` | Maximum memory entries to load |
+| `conductor.memory.retention.days` | `30` | Number of days to retain memory entries |
 | `conductor.memory.compression.enabled` | `false` | Enable memory compression |
+
+#### Memory Manager Configuration
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `conductor.memory.threshold.warning` | `0.75` | Warning threshold (0.0-1.0) for memory usage |
+| `conductor.memory.threshold.critical` | `0.85` | Critical threshold (0.0-1.0) for memory usage |
+| `conductor.memory.threshold.emergency` | `0.95` | Emergency threshold (0.0-1.0) for memory usage |
+| `conductor.memory.monitoring.interval.seconds` | `30` | Interval for memory monitoring in seconds |
+| `conductor.memory.cleanup.interval.minutes` | `5` | Interval for memory cleanup in minutes |
+| `conductor.memory.resource.expiry.hours` | `1` | Time in hours before resources expire |
+| `conductor.memory.threadpool.size` | `2` | Thread pool size for memory manager (1-10) |
 
 ### Logging Configuration
 
@@ -340,9 +353,23 @@ java -Dconductor.database.url="jdbc:h2:./data/prod_db" \
 ### Using Configuration Files
 Create `application-custom.properties`:
 ```properties
+# Database
 conductor.database.url=jdbc:h2:./data/custom_db;FILE_LOCK=FS
+
+# Tools
 conductor.tools.coderunner.allowed.commands=echo,pwd,ls,cat,grep
+
+# Memory Store
 conductor.memory.default.limit=15
+
+# Memory Manager - Automatic memory monitoring and cleanup
+conductor.memory.threshold.warning=0.70
+conductor.memory.threshold.critical=0.80
+conductor.memory.threshold.emergency=0.90
+conductor.memory.monitoring.interval.seconds=60
+conductor.memory.cleanup.interval.minutes=10
+conductor.memory.resource.expiry.hours=2
+conductor.memory.threadpool.size=3
 ```
 
 ## Implementation Details

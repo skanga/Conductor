@@ -201,7 +201,7 @@ java -Dconductor.tools.coderunner.timeout=10s \
 
 ## Thread Safety
 
-The framework has been made fully thread-safe for concurrent operations. See [TECHNICAL_FEATURES.md](TECHNICAL_FEATURES.md) for detailed documentation.
+The framework has been made fully thread-safe for concurrent operations. See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation on architecture, thread safety, security, and advanced features.
 
 ### Key Thread Safety Features
 - **ConversationalAgent**: Thread-safe memory management with `CopyOnWriteArrayList` and `ReadWriteLock`

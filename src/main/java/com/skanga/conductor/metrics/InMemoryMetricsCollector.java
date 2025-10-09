@@ -1,6 +1,7 @@
 package com.skanga.conductor.metrics;
 
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.config.MetricsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +55,7 @@ public class InMemoryMetricsCollector implements MetricsCollector {
      * Creates a new in-memory metrics collector with configuration from ApplicationConfig.
      */
     public InMemoryMetricsCollector() {
-        ApplicationConfig.MetricsConfig config = ApplicationConfig.getInstance().getMetricsConfig();
+        MetricsConfig config = ApplicationConfig.getInstance().getMetricsConfig();
         this.retentionPeriodMs = config.getRetentionPeriod().toMillis();
         this.maxMetrics = config.getMaxMetricsInMemory();
         this.enabled = config.isEnabled();
@@ -158,11 +159,12 @@ public class InMemoryMetricsCollector implements MetricsCollector {
 
     /**
      * Gets all metric summaries.
+     * Returns an unmodifiable view to avoid defensive copying.
      *
      * @return map of metric names to their summaries
      */
     public Map<String, MetricSummary> getAllSummaries() {
-        return new HashMap<>(summaries);
+        return Collections.unmodifiableMap(summaries);
     }
 
     /**

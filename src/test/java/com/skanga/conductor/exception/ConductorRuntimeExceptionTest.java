@@ -68,7 +68,7 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
     void testMessageAndContextConstructor() {
         String message = "Test runtime exception with context";
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.VALIDATION_NULL_VALUE)
+            .errorCode(ErrorCodes.INVALID_INPUT)
             .category(ExceptionContext.ErrorCategory.VALIDATION)
             .operation("test_operation")
             .correlationId("test-123")
@@ -76,13 +76,13 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
 
         ConductorRuntimeException exception = new ConductorRuntimeException(message, context);
 
-        assertTrue(exception.getMessage().contains(ErrorCodes.VALIDATION_NULL_VALUE));
+        assertTrue(exception.getMessage().contains(ErrorCodes.INVALID_INPUT));
         assertTrue(exception.getMessage().contains(message));
         assertTrue(exception.getMessage().contains("operation: test_operation"));
         assertNull(exception.getCause());
         assertSame(context, exception.getContext());
         assertTrue(exception.hasContext());
-        assertEquals(ErrorCodes.VALIDATION_NULL_VALUE, exception.getErrorCode());
+        assertEquals(ErrorCodes.INVALID_INPUT, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.VALIDATION, exception.getErrorCategory());
     }
 
@@ -93,7 +93,7 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
         String message = "Test runtime exception with all params";
         RuntimeException cause = new RuntimeException("Original cause");
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.CONFIG_DATABASE_URL_INVALID)
+            .errorCode(ErrorCodes.CONFIGURATION_ERROR)
             .category(ExceptionContext.ErrorCategory.CONFIGURATION)
             .operation("database_connection")
             .correlationId("db-test-456")
@@ -101,13 +101,13 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
 
         ConductorRuntimeException exception = new ConductorRuntimeException(message, cause, context);
 
-        assertTrue(exception.getMessage().contains(ErrorCodes.CONFIG_DATABASE_URL_INVALID));
+        assertTrue(exception.getMessage().contains(ErrorCodes.CONFIGURATION_ERROR));
         assertTrue(exception.getMessage().contains(message));
         assertTrue(exception.getMessage().contains("operation: database_connection"));
         assertSame(cause, exception.getCause());
         assertSame(context, exception.getContext());
         assertTrue(exception.hasContext());
-        assertEquals(ErrorCodes.CONFIG_DATABASE_URL_INVALID, exception.getErrorCode());
+        assertEquals(ErrorCodes.CONFIGURATION_ERROR, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.CONFIGURATION, exception.getErrorCategory());
     }
 
@@ -149,7 +149,7 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
     void testDetailedSummaryWithContext() {
         String message = "Database connection failed";
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.CONFIG_DATABASE_URL_INVALID)
+            .errorCode(ErrorCodes.CONFIGURATION_ERROR)
             .operation("connect_to_database")
             .category(ExceptionContext.ErrorCategory.CONFIGURATION)
             .correlationId("conn-789")
@@ -170,12 +170,12 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
     void testMessageEnhancementWithErrorCodeOnly() {
         String message = "Simple error message";
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.LLM_SERVICE_UNAVAILABLE)
+            .errorCode(ErrorCodes.SERVICE_UNAVAILABLE)
             .build();
 
         ConductorRuntimeException exception = new ConductorRuntimeException(message, context);
 
-        assertTrue(exception.getMessage().startsWith("[" + ErrorCodes.LLM_SERVICE_UNAVAILABLE + "]"));
+        assertTrue(exception.getMessage().startsWith("[" + ErrorCodes.SERVICE_UNAVAILABLE + "]"));
         assertTrue(exception.getMessage().contains(message));
     }
 
@@ -200,13 +200,13 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
     void testMessageEnhancementWithErrorCodeAndOperation() {
         String message = "Complex failure";
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.TOOL_EXECUTION_FAILED)
+            .errorCode(ErrorCodes.EXECUTION_FAILED)
             .operation("execute_file_reader")
             .build();
 
         ConductorRuntimeException exception = new ConductorRuntimeException(message, context);
 
-        assertTrue(exception.getMessage().startsWith("[" + ErrorCodes.TOOL_EXECUTION_FAILED + "]"));
+        assertTrue(exception.getMessage().startsWith("[" + ErrorCodes.EXECUTION_FAILED + "]"));
         assertTrue(exception.getMessage().contains(message));
         assertTrue(exception.getMessage().contains("(operation: execute_file_reader)"));
     }
@@ -260,7 +260,7 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
     void testComplexContextMetadata() {
         String message = "Complex metadata test";
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.MEMORY_CLEANUP_FAILED)
+            .errorCode(ErrorCodes.INTERNAL_ERROR)
             .operation("memory_cleanup")
             .category(ExceptionContext.ErrorCategory.SYSTEM_ERROR)
             .correlationId("cleanup-001")
@@ -272,7 +272,7 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
         ConductorRuntimeException exception = new ConductorRuntimeException(message, context);
 
         assertTrue(exception.hasContext());
-        assertEquals(ErrorCodes.MEMORY_CLEANUP_FAILED, exception.getErrorCode());
+        assertEquals(ErrorCodes.INTERNAL_ERROR, exception.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.SYSTEM_ERROR, exception.getErrorCategory());
 
         String detailedSummary = exception.getDetailedSummary();
@@ -285,14 +285,14 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
     @DisplayName("Should handle null message gracefully")
     void testNullMessageHandling() {
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.VALIDATION_NULL_VALUE)
+            .errorCode(ErrorCodes.INVALID_INPUT)
             .operation("null_test")
             .build();
 
         ConductorRuntimeException exception = new ConductorRuntimeException(null, context);
 
         assertNotNull(exception.getMessage());
-        assertTrue(exception.getMessage().contains(ErrorCodes.VALIDATION_NULL_VALUE));
+        assertTrue(exception.getMessage().contains(ErrorCodes.INVALID_INPUT));
         assertTrue(exception.hasContext());
     }
 
@@ -313,12 +313,12 @@ class ConductorRuntimeExceptionTest extends ConductorTestBase {
 
         // Test with context
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.DATA_SERIALIZATION_FAILED)
+            .errorCode(ErrorCodes.INVALID_FORMAT)
             .operation("serialize_exception")
             .build();
 
         ConductorRuntimeException contextException = new ConductorRuntimeException(message, context);
         assertTrue(contextException.hasContext());
-        assertEquals(ErrorCodes.DATA_SERIALIZATION_FAILED, contextException.getErrorCode());
+        assertEquals(ErrorCodes.INVALID_FORMAT, contextException.getErrorCode());
     }
 }

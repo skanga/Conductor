@@ -1,4 +1,6 @@
 package com.skanga.conductor.workflow.templates;
+import com.skanga.conductor.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.TemplateException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -156,12 +158,12 @@ class PromptTemplateEngineTest {
         // Valid template
         assertDoesNotThrow(() -> engine.validateTemplate("{{name}}"));
 
-        // Invalid templates
-        assertThrows(IllegalArgumentException.class, () ->
+        // Invalid templates - now throw TemplateException
+        assertThrows(TemplateException.class, () ->
             engine.validateTemplate("{{name}"));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(TemplateException.class, () ->
             engine.validateTemplate("name}}"));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(TemplateException.class, () ->
             engine.validateTemplate("{{}}"));
     }
 

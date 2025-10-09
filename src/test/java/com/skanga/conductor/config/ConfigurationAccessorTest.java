@@ -139,7 +139,7 @@ class ConfigurationAccessorTest extends ConfigTestBase {
     @Order(14)
     @DisplayName("Should get complete database config")
     void testGetDatabaseConfig() {
-        ApplicationConfig.DatabaseConfig dbConfig = ConfigurationAccessor.getDatabaseConfig();
+        DatabaseConfig dbConfig = ConfigurationAccessor.getDatabaseConfig();
         assertNotNull(dbConfig);
         // Config objects are not necessarily singletons, just verify they're not null
         assertNotNull(dbConfig);
@@ -201,7 +201,7 @@ class ConfigurationAccessorTest extends ConfigTestBase {
     @Order(21)
     @DisplayName("Should get complete tool config")
     void testGetToolConfig() {
-        ApplicationConfig.ToolConfig toolConfig = ConfigurationAccessor.getToolConfig();
+        ToolConfig toolConfig = ConfigurationAccessor.getToolConfig();
         assertNotNull(toolConfig);
         assertNotNull(toolConfig);
         assertNotNull(ApplicationConfig.getInstance().getToolConfig());
@@ -371,7 +371,7 @@ class ConfigurationAccessorTest extends ConfigTestBase {
     @Order(41)
     @DisplayName("Should get complete LLM config")
     void testGetLLMConfig() {
-        ApplicationConfig.LLMConfig llmConfig = ConfigurationAccessor.getLLMConfig();
+        LLMConfig llmConfig = ConfigurationAccessor.getLLMConfig();
         assertNotNull(llmConfig);
         assertNotNull(llmConfig);
         assertNotNull(ApplicationConfig.getInstance().getLLMConfig());
@@ -407,7 +407,7 @@ class ConfigurationAccessorTest extends ConfigTestBase {
     @Order(45)
     @DisplayName("Should get complete memory config")
     void testGetMemoryConfig() {
-        ApplicationConfig.MemoryConfig memoryConfig = ConfigurationAccessor.getMemoryConfig();
+        MemoryConfig memoryConfig = ConfigurationAccessor.getMemoryConfig();
         assertNotNull(memoryConfig);
         assertNotNull(memoryConfig);
         assertNotNull(ApplicationConfig.getInstance().getMemoryConfig());
@@ -502,7 +502,7 @@ class ConfigurationAccessorTest extends ConfigTestBase {
     @Order(56)
     @DisplayName("Should get complete metrics config")
     void testGetMetricsConfig() {
-        ApplicationConfig.MetricsConfig metricsConfig = ConfigurationAccessor.getMetricsConfig();
+        MetricsConfig metricsConfig = ConfigurationAccessor.getMetricsConfig();
         assertNotNull(metricsConfig);
         assertNotNull(metricsConfig);
         assertNotNull(ApplicationConfig.getInstance().getMetricsConfig());
@@ -579,13 +579,13 @@ class ConfigurationAccessorTest extends ConfigTestBase {
     @Order(64)
     @DisplayName("Should get provider config for valid provider")
     void testGetProviderConfig() {
-        ApplicationConfig.ProviderConfig openaiConfig = ConfigurationAccessor.getProviderConfig("openai");
+        LLMConfig.ProviderConfig openaiConfig = ConfigurationAccessor.getProviderConfig("openai");
         assertNotNull(openaiConfig);
 
-        ApplicationConfig.ProviderConfig anthropicConfig = ConfigurationAccessor.getProviderConfig("anthropic");
+        LLMConfig.ProviderConfig anthropicConfig = ConfigurationAccessor.getProviderConfig("anthropic");
         assertNotNull(anthropicConfig);
 
-        ApplicationConfig.ProviderConfig geminiConfig = ConfigurationAccessor.getProviderConfig("gemini");
+        LLMConfig.ProviderConfig geminiConfig = ConfigurationAccessor.getProviderConfig("gemini");
         assertNotNull(geminiConfig);
     }
 
@@ -606,8 +606,8 @@ class ConfigurationAccessorTest extends ConfigTestBase {
     @Order(66)
     @DisplayName("Should provide consistent access to nested configuration objects")
     void testConsistentNestedConfigurationAccess() {
-        ApplicationConfig.DatabaseConfig dbConfig1 = ConfigurationAccessor.getDatabaseConfig();
-        ApplicationConfig.DatabaseConfig dbConfig2 = ConfigurationAccessor.getDatabaseConfig();
+        DatabaseConfig dbConfig1 = ConfigurationAccessor.getDatabaseConfig();
+        DatabaseConfig dbConfig2 = ConfigurationAccessor.getDatabaseConfig();
 
         // Config objects are not necessarily singletons, just verify they're equivalent
         assertNotNull(dbConfig1);

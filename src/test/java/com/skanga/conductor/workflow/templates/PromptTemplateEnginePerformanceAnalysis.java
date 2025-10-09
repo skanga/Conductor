@@ -1,4 +1,5 @@
 package com.skanga.conductor.workflow.templates;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Disabled;

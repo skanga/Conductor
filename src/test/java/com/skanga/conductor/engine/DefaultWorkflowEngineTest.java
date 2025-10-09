@@ -8,7 +8,7 @@ import com.skanga.conductor.orchestration.Orchestrator;
 import com.skanga.conductor.provider.LLMProvider;
 import com.skanga.conductor.workflow.config.WorkflowContext;
 import com.skanga.conductor.workflow.config.WorkflowDefinition;
-import com.skanga.conductor.workflow.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -144,13 +144,16 @@ class DefaultWorkflowEngineTest {
         }
 
         @Test
-        @DisplayName("Should handle empty input gracefully")
-        void shouldHandleEmptyInputGracefully() throws Exception {
-            WorkflowEngine.WorkflowResult result = engine.execute();
+        @DisplayName("Should reject empty input with validation error")
+        void shouldRejectEmptyInputWithValidationError() {
+            // Execute with empty input should throw exception due to validation
+            ConductorException exception = assertThrows(ConductorException.class, () -> {
+                engine.execute();
+            });
 
-            assertNotNull(result);
-            assertTrue(result.isSuccess());
-            assertEquals(0, result.getTotalExecutionTimeMs());
+            assertNotNull(exception);
+            assertTrue(exception.getMessage().contains("stages cannot be empty") ||
+                      exception.getMessage().contains("Workflow execution failed"));
         }
 
         @Test
@@ -279,22 +282,14 @@ class DefaultWorkflowEngineTest {
         }
 
         @Test
-        @DisplayName("Should report validation messages when not configured")
-        void shouldReportValidationMessagesWhenNotConfigured() throws Exception {
-            // Create engine without orchestrator
-            DefaultWorkflowEngine unconfiguredEngine = new DefaultWorkflowEngine(null);
+        @DisplayName("Should reject null orchestrator during construction")
+        void shouldRejectNullOrchestratorDuringConstruction() {
+            // Creating engine with null orchestrator should throw IllegalArgumentException
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+                new DefaultWorkflowEngine(null);
+            });
 
-            try {
-                WorkflowEngine.EngineStatus status = unconfiguredEngine.getStatus();
-
-                // Engine still reports as configured even with null orchestrator
-                assertTrue(status.isConfigured());
-                // But validation messages should still indicate missing orchestrator
-                assertFalse(status.getValidationMessages().isEmpty());
-                assertTrue(status.getValidationMessages().contains("Orchestrator is not configured"));
-            } finally {
-                unconfiguredEngine.close();
-            }
+            assertEquals("orchestrator cannot be null", exception.getMessage());
         }
 
         @Test
@@ -308,49 +303,6 @@ class DefaultWorkflowEngineTest {
             assertEquals(0, metadata.get("execution_context_size"));
             assertEquals(0, metadata.get("executed_stages_count"));
             assertEquals(false, metadata.get("closed"));
-        }
-    }
-
-    @Nested
-    @DisplayName("Deprecated Methods Tests")
-    class DeprecatedMethodsTests {
-
-        @Test
-        @DisplayName("Should handle deprecated getExecutionContext safely")
-        void shouldHandleDeprecatedGetExecutionContextSafely() {
-            @SuppressWarnings("deprecation")
-            Map<String, Object> context = engine.getExecutionContext();
-
-            assertNotNull(context);
-            assertTrue(context.isEmpty());
-        }
-
-        @Test
-        @DisplayName("Should handle deprecated getExecutedStages safely")
-        void shouldHandleDeprecatedGetExecutedStagesSafely() {
-            @SuppressWarnings("deprecation")
-            List<DefaultWorkflowEngine.WorkflowStage> stages = engine.getExecutedStages();
-
-            assertNotNull(stages);
-            assertTrue(stages.isEmpty());
-        }
-
-        @Test
-        @DisplayName("Should handle deprecated setContextVariable safely")
-        void shouldHandleDeprecatedSetContextVariableSafely() {
-            @SuppressWarnings("deprecation")
-            Runnable operation = () -> engine.setContextVariable("key", "value");
-
-            assertDoesNotThrow(operation::run);
-        }
-
-        @Test
-        @DisplayName("Should handle deprecated getContextVariable safely")
-        void shouldHandleDeprecatedGetContextVariableSafely() {
-            @SuppressWarnings("deprecation")
-            Object value = engine.getContextVariable("key");
-
-            assertNull(value);
         }
     }
 

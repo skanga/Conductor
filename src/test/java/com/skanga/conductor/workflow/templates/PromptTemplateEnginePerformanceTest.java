@@ -1,4 +1,5 @@
 package com.skanga.conductor.workflow.templates;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

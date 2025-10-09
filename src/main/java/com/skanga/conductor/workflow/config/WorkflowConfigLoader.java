@@ -14,7 +14,18 @@ import java.nio.file.Paths;
 
 /**
  * Loads and validates workflow and agent configurations from YAML files.
- * Handles file system access, YAML parsing, and configuration validation.
+ * <p>
+ * Performs comprehensive validation including:
+ * </p>
+ * <ul>
+ * <li>JSON schema validation for structure and types</li>
+ * <li>Business rule validation for workflow logic</li>
+ * <li>Variable substitution and expansion</li>
+ * </ul>
+ * <p>
+ * This ensures workflow definitions are valid before execution begins,
+ * preventing runtime failures due to configuration errors.
+ * </p>
  */
 public class WorkflowConfigLoader {
 
@@ -22,10 +33,32 @@ public class WorkflowConfigLoader {
 
     private final ObjectMapper yamlMapper;
     private final VariableSubstitution variableSubstitution;
+    private final WorkflowSchemaValidator schemaValidator;
+    private final boolean schemaValidationEnabled;
 
+    /**
+     * Creates a new WorkflowConfigLoader with schema validation enabled.
+     */
     public WorkflowConfigLoader() {
+        this(true);
+    }
+
+    /**
+     * Creates a new WorkflowConfigLoader with configurable schema validation.
+     *
+     * @param schemaValidationEnabled whether to enable JSON schema validation
+     */
+    public WorkflowConfigLoader(boolean schemaValidationEnabled) {
         this.yamlMapper = createYamlMapper();
         this.variableSubstitution = new VariableSubstitution();
+        this.schemaValidationEnabled = schemaValidationEnabled;
+        this.schemaValidator = schemaValidationEnabled ? new WorkflowSchemaValidator() : null;
+
+        if (schemaValidationEnabled) {
+            logger.info("WorkflowConfigLoader initialized with schema validation enabled");
+        } else {
+            logger.warn("WorkflowConfigLoader initialized with schema validation DISABLED");
+        }
     }
 
     /**
@@ -41,6 +74,15 @@ public class WorkflowConfigLoader {
 
     /**
      * Loads a workflow definition from a YAML file.
+     * <p>
+     * Performs the following steps:
+     * </p>
+     * <ol>
+     * <li>Read and parse YAML file</li>
+     * <li>Validate against JSON schema (if enabled)</li>
+     * <li>Perform variable substitution</li>
+     * <li>Validate business rules and constraints</li>
+     * </ol>
      *
      * @param filePath path to the workflow YAML file
      * @return parsed and validated workflow definition
@@ -50,20 +92,29 @@ public class WorkflowConfigLoader {
     public WorkflowDefinition loadWorkflow(String filePath) throws IOException {
         logger.info("Loading workflow from: {}", filePath);
 
-        // Try to load from file system first, then from classpath
+        // Read the raw YAML content for schema validation
+        String yamlContent = readFileContent(filePath);
+
+        // Perform JSON schema validation BEFORE parsing to object model
+        if (schemaValidationEnabled) {
+            logger.debug("Performing schema validation for: {}", filePath);
+            WorkflowSchemaValidator.ValidationResult validationResult =
+                schemaValidator.validateWorkflowYaml(yamlContent);
+
+            if (!validationResult.isValid()) {
+                logger.error("Schema validation failed for {}: {}", filePath, validationResult.getErrorMessage());
+                throw new IllegalArgumentException(
+                    "Workflow schema validation failed for " + filePath + ":\n" +
+                    validationResult.getErrorMessage()
+                );
+            }
+            logger.debug("Schema validation passed for: {}", filePath);
+        }
+
+        // Parse YAML to object model
         WorkflowDefinition workflow;
         try {
-            Path path = Paths.get(filePath);
-            if (Files.exists(path)) {
-                workflow = yamlMapper.readValue(path.toFile(), WorkflowDefinition.class);
-            } else {
-                // Try classpath
-                InputStream inputStream = getClass().getClassLoader().getResourceAsStream(filePath);
-                if (inputStream == null) {
-                    throw new IOException("Workflow file not found: " + filePath);
-                }
-                workflow = yamlMapper.readValue(inputStream, WorkflowDefinition.class);
-            }
+            workflow = yamlMapper.readValue(yamlContent, WorkflowDefinition.class);
         } catch (IOException e) {
             logger.error("Failed to parse workflow YAML: {}", e.getMessage());
             throw new IOException("Failed to parse workflow from " + filePath + ": " + e.getMessage(), e);
@@ -72,7 +123,7 @@ public class WorkflowConfigLoader {
         // Perform variable substitution
         workflow = variableSubstitution.substituteWorkflowVariables(workflow);
 
-        // Validate the configuration
+        // Validate the configuration (business rules)
         try {
             workflow.validate();
         } catch (IllegalArgumentException e) {
@@ -80,11 +131,32 @@ public class WorkflowConfigLoader {
             throw new IllegalArgumentException("Invalid workflow configuration in " + filePath + ": " + e.getMessage(), e);
         }
 
-        logger.info("Successfully loaded workflow: {} (version: {})",
+        logger.info("Successfully loaded and validated workflow: {} (version: {})",
                    workflow.getMetadata().getName(),
                    workflow.getMetadata().getVersion());
 
         return workflow;
+    }
+
+    /**
+     * Reads file content from file system or classpath.
+     *
+     * @param filePath path to the file
+     * @return file content as string
+     * @throws IOException if file cannot be read
+     */
+    private String readFileContent(String filePath) throws IOException {
+        Path path = Paths.get(filePath);
+        if (Files.exists(path)) {
+            return Files.readString(path);
+        } else {
+            // Try classpath
+            InputStream inputStream = getClass().getClassLoader().getResourceAsStream(filePath);
+            if (inputStream == null) {
+                throw new IOException("Workflow file not found: " + filePath);
+            }
+            return new String(inputStream.readAllBytes());
+        }
     }
 
     /**

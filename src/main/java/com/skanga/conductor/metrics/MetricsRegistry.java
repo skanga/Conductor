@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
+import com.skanga.conductor.config.MetricsConfig;
 
 /**
  * Central registry for managing metrics collectors in the Conductor framework.
@@ -44,7 +45,7 @@ public class MetricsRegistry {
     private final boolean enabled;
 
     private MetricsRegistry() {
-        ApplicationConfig.MetricsConfig config = ApplicationConfig.getInstance().getMetricsConfig();
+        MetricsConfig config = ApplicationConfig.getInstance().getMetricsConfig();
         this.enabled = config.isEnabled();
 
         if (enabled) {
@@ -158,6 +159,7 @@ public class MetricsRegistry {
     public void recordAgentExecution(String agentName, long durationMs, boolean success) {
         if (!enabled) return;
 
+        // Reuse tag map for both metrics to reduce allocation
         Map<String, String> tags = Map.of(
             "agent", agentName,
             "success", String.valueOf(success)
@@ -167,6 +169,7 @@ public class MetricsRegistry {
         record(Metric.counter("agent.execution.count", tags));
 
         if (!success) {
+            // Reuse single-entry map for error metric
             record(Metric.counter("agent.execution.errors", Map.of("agent", agentName)));
         }
     }
@@ -181,6 +184,7 @@ public class MetricsRegistry {
     public void recordToolExecution(String toolName, long durationMs, boolean success) {
         if (!enabled) return;
 
+        // Reuse tag map for both metrics to reduce allocation
         Map<String, String> tags = Map.of(
             "tool", toolName,
             "success", String.valueOf(success)
@@ -190,6 +194,7 @@ public class MetricsRegistry {
         record(Metric.counter("tool.execution.count", tags));
 
         if (!success) {
+            // Reuse single-entry map for error metric
             record(Metric.counter("tool.execution.errors", Map.of("tool", toolName)));
         }
     }
@@ -293,7 +298,7 @@ public class MetricsRegistry {
         logger.debug("MetricsRegistry shutdown complete");
     }
 
-    private void initializePatterns(ApplicationConfig.MetricsConfig config) {
+    private void initializePatterns(MetricsConfig config) {
         // Convert enabled patterns to compiled regex patterns
         for (String pattern : config.getEnabledMetrics()) {
             try {

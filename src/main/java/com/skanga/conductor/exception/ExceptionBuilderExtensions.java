@@ -30,7 +30,7 @@ import java.util.Map;
  * <pre>
  * // Workflow execution failure
  * throw ExceptionBuilderExtensions.workflowExecution("Stage failed")
- *     .errorCode(ErrorCodes.WORKFLOW_STAGE_FAILED)
+ *     .errorCode(ErrorCodes.EXECUTION_FAILED)
  *     .workflow("book-creation", "stage-1")
  *     .executionTime(Duration.ofMinutes(5))
  *     .retryWithBackoff()
@@ -38,7 +38,7 @@ import java.util.Map;
  *
  * // Memory management failure
  * throw ExceptionBuilderExtensions.memoryManagement("Cleanup failed")
- *     .errorCode(ErrorCodes.MEMORY_CLEANUP_FAILED)
+ *     .errorCode(ErrorCodes.INTERNAL_ERROR)
  *     .memoryUsage(0.95)
  *     .cleanupTask("expired-resources")
  *     .contactAdmin()
@@ -46,7 +46,7 @@ import java.util.Map;
  *
  * // Database operation failure
  * throw ExceptionBuilderExtensions.databaseOperation("Query timeout")
- *     .errorCode(ErrorCodes.DATABASE_QUERY_TIMEOUT)
+ *     .errorCode(ErrorCodes.TIMEOUT)
  *     .sqlOperation("SELECT", "agent_memory")
  *     .queryTimeout(Duration.ofSeconds(30))
  *     .increaseTimeout()

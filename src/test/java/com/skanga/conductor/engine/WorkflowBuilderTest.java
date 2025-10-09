@@ -360,50 +360,41 @@ class WorkflowBuilderTest {
     class EdgeCasesTests {
 
         @Test
-        @DisplayName("Should handle null parameters in stage addition")
+        @DisplayName("Should reject null stage name parameter")
         void shouldHandleNullParametersInStageAddition() {
             WorkflowBuilder builder = new WorkflowBuilder();
 
-            assertDoesNotThrow(() -> {
+            assertThrows(IllegalArgumentException.class, () -> {
                 builder.addStage(null, null, null, null, null, null);
             });
-
-            List<DefaultWorkflowEngine.StageDefinition> stages = builder.build();
-            assertEquals(1, stages.size());
-
-            DefaultWorkflowEngine.StageDefinition stage = stages.get(0);
-            assertNull(stage.getName());
-            assertNull(stage.getPromptTemplate());
         }
 
         @Test
-        @DisplayName("Should handle empty string parameters")
+        @DisplayName("Should reject empty stage name parameter")
         void shouldHandleEmptyStringParameters() {
             WorkflowBuilder builder = new WorkflowBuilder();
 
-            builder.addStage("", "", "", mockLLMProvider, "", "");
-
-            List<DefaultWorkflowEngine.StageDefinition> stages = builder.build();
-            assertEquals(1, stages.size());
-
-            DefaultWorkflowEngine.StageDefinition stage = stages.get(0);
-            assertEquals("", stage.getName());
-            assertEquals("", stage.getPromptTemplate());
+            assertThrows(IllegalArgumentException.class, () -> {
+                builder.addStage("", "", "", mockLLMProvider, "", "");
+            });
         }
 
         @Test
-        @DisplayName("Should handle zero or negative retries")
+        @DisplayName("Should accept zero retries but reject negative retries")
         void shouldHandleZeroOrNegativeRetries() {
-            WorkflowBuilder builder = new WorkflowBuilder();
+            WorkflowBuilder builder1 = new WorkflowBuilder();
+            WorkflowBuilder builder2 = new WorkflowBuilder();
 
-            builder.addStage("stage1", "agent1", "desc1", mockLLMProvider, "sys1", "tmpl1", 0, null, null);
-            builder.addStage("stage2", "agent2", "desc2", mockLLMProvider, "sys2", "tmpl2", -5, null, null);
-
-            List<DefaultWorkflowEngine.StageDefinition> stages = builder.build();
-            assertEquals(2, stages.size());
-
+            // Zero retries should be accepted
+            builder1.addStage("stage1", "agent1", "desc1", mockLLMProvider, "sys1", "tmpl1", 0, null, null);
+            List<DefaultWorkflowEngine.StageDefinition> stages = builder1.build();
+            assertEquals(1, stages.size());
             assertEquals(0, stages.get(0).getMaxRetries());
-            assertEquals(-5, stages.get(1).getMaxRetries());
+
+            // Negative retries should be rejected
+            assertThrows(IllegalArgumentException.class, () -> {
+                builder2.addStage("stage2", "agent2", "desc2", mockLLMProvider, "sys2", "tmpl2", -5, null, null);
+            });
         }
 
         @Test

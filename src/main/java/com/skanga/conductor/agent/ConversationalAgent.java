@@ -3,6 +3,7 @@ package com.skanga.conductor.agent;
 import com.skanga.conductor.utils.JsonUtils;
 import com.skanga.conductor.utils.ValidationUtils;
 import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.config.MemoryConfig;
 import com.skanga.conductor.exception.ConductorException;
 import com.skanga.conductor.memory.MemoryStore;
 import com.skanga.conductor.metrics.MetricsRegistry;
@@ -270,7 +271,7 @@ public class ConversationalAgent implements SubAgent {
                 // Double-check after acquiring lock (memory might have been cleared)
                 if (!agentMemory.isEmpty()) {
                     promptBuilder.append("Memory (most recent first):\n");
-                    ApplicationConfig.MemoryConfig memoryConfig = ApplicationConfig.getInstance().getMemoryConfig();
+                    MemoryConfig memoryConfig = ApplicationConfig.getInstance().getMemoryConfig();
                     int memoryLimit = memoryConfig.getDefaultMemoryLimit();
                     int memoryStart = Math.max(0, agentMemory.size() - memoryLimit);
                     for (int i = memoryStart; i < agentMemory.size(); i++) {

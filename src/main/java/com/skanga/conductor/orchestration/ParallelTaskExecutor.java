@@ -8,7 +8,7 @@ import com.skanga.conductor.memory.MemoryStore;
 import com.skanga.conductor.metrics.Metric;
 import com.skanga.conductor.metrics.MetricType;
 import com.skanga.conductor.metrics.MetricsRegistry;
-import com.skanga.conductor.workflow.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,9 +31,17 @@ import java.util.function.Function;
  * <li>Comprehensive error handling and timeout support</li>
  * <li>Metrics collection for performance monitoring</li>
  * <li>Graceful degradation to sequential execution on errors</li>
+ * <li>AutoCloseable for proper resource cleanup</li>
  * </ul>
+ *
+ * <p>Usage with try-with-resources:</p>
+ * <pre>{@code
+ * try (ParallelTaskExecutor executor = new ParallelTaskExecutor()) {
+ *     executor.executeBatches(...);
+ * } // Executor is automatically shut down
+ * }</pre>
  */
-public class ParallelTaskExecutor {
+public class ParallelTaskExecutor implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(ParallelTaskExecutor.class);
 
@@ -262,7 +270,7 @@ public class ParallelTaskExecutor {
             Map<String, Object> templateVars = buildTemplateVariables(userRequest, taskOutputs);
 
             // Render prompt template
-            String agentPrompt = templateEngine.renderString(task.promptTemplate, templateVars);
+            String agentPrompt = templateEngine.render(task.promptTemplate, templateVars);
 
             // Execute task
             ExecutionResult result = agent.execute(new ExecutionInput(agentPrompt, null));
@@ -346,18 +354,42 @@ public class ParallelTaskExecutor {
 
     /**
      * Shuts down the executor service.
+     * <p>
+     * Attempts graceful shutdown first, waiting up to 30 seconds for tasks to complete.
+     * If tasks don't complete within the timeout, forces immediate shutdown.
+     * </p>
      */
     public void shutdown() {
         if (executorService != null && !executorService.isShutdown()) {
+            logger.debug("Shutting down ParallelTaskExecutor");
             executorService.shutdown();
             try {
                 if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+                    logger.warn("Executor did not terminate gracefully, forcing shutdown");
                     executorService.shutdownNow();
                 }
             } catch (InterruptedException e) {
+                logger.warn("Interrupted while waiting for executor shutdown, forcing immediate shutdown");
                 executorService.shutdownNow();
                 Thread.currentThread().interrupt();
             }
         }
+
+        // Also close the template engine to prevent resource leaks
+        if (templateEngine != null) {
+            templateEngine.close();
+        }
+    }
+
+    /**
+     * Closes this executor and releases all resources.
+     * <p>
+     * This method implements AutoCloseable to support try-with-resources.
+     * Delegates to {@link #shutdown()} for cleanup.
+     * </p>
+     */
+    @Override
+    public void close() {
+        shutdown();
     }
 }

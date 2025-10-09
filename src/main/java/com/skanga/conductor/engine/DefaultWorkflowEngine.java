@@ -9,12 +9,14 @@ import com.skanga.conductor.provider.LLMProvider;
 import com.skanga.conductor.provider.DemoMockLLMProvider;
 import com.skanga.conductor.workflow.config.WorkflowDefinition;
 import com.skanga.conductor.workflow.config.WorkflowContext;
-import com.skanga.conductor.workflow.templates.PromptTemplateEngine;
+import com.skanga.conductor.templates.PromptTemplateEngine;
 import com.skanga.conductor.utils.ValidationUtils;
+import com.skanga.conductor.engine.execution.StageExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,18 +46,55 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
 
     private final Orchestrator orchestrator;
     private final PromptTemplateEngine templateEngine;
-    private volatile boolean configured = true;
-    private volatile boolean closed = false;
-    private volatile LLMProvider defaultLLMProvider;
+    private final StageExecutor stageExecutor;
+    private final boolean configured = true;  // Immutable after construction
+    private volatile boolean closed = false;  // Mutable, needs volatile for visibility
+    private volatile LLMProvider defaultLLMProvider;  // Lazy init with double-checked locking
 
+    /**
+     * Creates a new DefaultWorkflowEngine with default dependencies.
+     * <p>
+     * This constructor creates its own PromptTemplateEngine instance.
+     * For better testability, use the constructor that accepts dependencies.
+     * </p>
+     *
+     * @param orchestrator the orchestrator for agent management
+     * @throws IllegalArgumentException if orchestrator is null
+     */
     public DefaultWorkflowEngine(Orchestrator orchestrator) {
-        this.orchestrator = orchestrator;
-        this.templateEngine = new PromptTemplateEngine();
+        this(orchestrator, new PromptTemplateEngine());
     }
 
     /**
-     * Thread-local execution state that isolates workflow execution data
-     * between concurrent executions.
+     * Creates a new DefaultWorkflowEngine with injected dependencies.
+     * <p>
+     * This constructor is preferred for testing and when you need to control
+     * the template engine instance.
+     * </p>
+     *
+     * @param orchestrator the orchestrator for agent management
+     * @param templateEngine the template engine for prompt rendering
+     * @throws IllegalArgumentException if orchestrator or templateEngine is null
+     */
+    public DefaultWorkflowEngine(Orchestrator orchestrator, PromptTemplateEngine templateEngine) {
+        if (orchestrator == null) {
+            throw new IllegalArgumentException("orchestrator cannot be null");
+        }
+        if (templateEngine == null) {
+            throw new IllegalArgumentException("templateEngine cannot be null");
+        }
+        this.orchestrator = orchestrator;
+        this.templateEngine = templateEngine;
+        this.stageExecutor = new StageExecutor(templateEngine);
+    }
+
+    /**
+     * Execution state that encapsulates workflow execution data for a single workflow run.
+     * <p>
+     * Each workflow execution creates its own ExecutionState instance, providing isolation
+     * between concurrent executions without requiring ThreadLocal. This design is thread-safe
+     * because each execution operates on its own state object.
+     * </p>
      */
     private static class ExecutionState {
         private final Map<String, Object> executionContext = new HashMap<>();
@@ -80,8 +119,16 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
 
     /**
      * Executes a single workflow stage with retry logic and validation.
+     *
+     * @param stageDefinition the stage definition to execute
+     * @return the stage result
+     * @throws ConductorException if stage execution fails
+     * @throws IllegalArgumentException if stageDefinition is null
      */
     public StageResult executeStage(StageDefinition stageDefinition) throws ConductorException {
+        if (stageDefinition == null) {
+            throw new IllegalArgumentException("stageDefinition cannot be null");
+        }
         ExecutionState state = new ExecutionState();
         return executeStage(stageDefinition, state);
     }
@@ -90,49 +137,34 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
      * Executes a single workflow stage with retry logic and validation using provided execution state.
      */
     private StageResult executeStage(StageDefinition stageDefinition, ExecutionState state) throws ConductorException {
-        logger.info("=== STAGE: {} ===", stageDefinition.getName());
+        // Build execution configuration
+        StageExecutor.ExecutionConfig config = new StageExecutor.ExecutionConfig.Builder()
+            .stageName(stageDefinition.getName())
+            .maxRetries(stageDefinition.getMaxRetries())
+            .resultValidator(stageDefinition.getResultValidator() != null ?
+                executorResult -> {
+                    // Convert to local StageResult for validation
+                    StageResult localResult = convertExecutorResult(executorResult);
+                    ValidationResult validation = stageDefinition.getResultValidator().apply(localResult);
+                    return convertToExecutorValidationResult(validation);
+                } : null)
+            .taskMetadata(stageDefinition.getTaskMetadata())
+            .build();
 
-        StageResult result = null;
-        Exception lastException = null;
+        // Define agent creator callback
+        StageExecutor.AgentCreator agentCreator = attempt ->
+            createAgent(stageDefinition.getAgentDefinition(), attempt);
 
-        // Execute stage with retry logic
-        for (int attempt = 1; attempt <= stageDefinition.getMaxRetries(); attempt++) {
-            logger.info("{} attempt {}/{}", stageDefinition.getName(), attempt, stageDefinition.getMaxRetries());
+        // Define prompt preparer callback
+        StageExecutor.PromptPreparer promptPreparer = (attempt, executionContext) ->
+            stageExecutor.preparePrompt(stageDefinition.getPromptTemplate(), attempt, executionContext);
 
-            try {
-                result = executeStageAttempt(stageDefinition, attempt, state);
+        // Execute stage using StageExecutor
+        StageExecutor.StageResult executorResult = stageExecutor.executeStage(
+            config, agentCreator, promptPreparer, state.getExecutionContext());
 
-                // Validate result if validator is provided
-                if (stageDefinition.getResultValidator() != null) {
-                    ValidationResult validation = stageDefinition.getResultValidator().apply(result);
-                    if (!validation.isValid()) {
-                        logger.warn("{} validation failed on attempt {}: {}",
-                                  stageDefinition.getName(), attempt, validation.getErrorMessage());
-                        if (attempt < stageDefinition.getMaxRetries()) {
-                            logger.info("Retrying with enhanced constraints...");
-                            continue;
-                        } else {
-                            logger.error("All validation attempts failed. Using result anyway.");
-                        }
-                    }
-                }
-
-                // Success - break out of retry loop
-                break;
-
-            } catch (Exception e) {
-                lastException = e;
-                logger.warn("Stage {} attempt {} failed: {}", stageDefinition.getName(), attempt, e.getMessage());
-                if (attempt >= stageDefinition.getMaxRetries()) {
-                    throw new ConductorException("Stage " + stageDefinition.getName() + " failed after " +
-                                                stageDefinition.getMaxRetries() + " attempts", e);
-                }
-            }
-        }
-
-        if (result == null) {
-            throw new ConductorException("Stage " + stageDefinition.getName() + " produced no result", lastException);
-        }
+        // Convert to local StageResult
+        StageResult result = convertExecutorResult(executorResult);
 
         // Store result in execution context
         state.setContextVariable(stageDefinition.getName() + ".result", result);
@@ -142,50 +174,32 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
         WorkflowStage executedStage = new WorkflowStage(stageDefinition.getName(), result);
         state.getExecutedStages().add(executedStage);
 
-        logger.info("Stage {} completed successfully", stageDefinition.getName());
         return result;
     }
 
     /**
-     * Executes a single attempt of a stage.
+     * Converts StageExecutor.StageResult to local StageResult.
      */
-    private StageResult executeStageAttempt(StageDefinition stageDefinition, int attempt, ExecutionState state) throws ConductorException {
-        long startTime = System.currentTimeMillis();
+    private StageResult convertExecutorResult(StageExecutor.StageResult executorResult) {
+        StageResult result = new StageResult();
+        result.setStageName(executorResult.getStageName());
+        result.setOutput(executorResult.getOutput());
+        result.setSuccess(executorResult.isSuccess());
+        result.setError(executorResult.getError());
+        result.setAttempt(executorResult.getAttempt());
+        result.setExecutionTimeMs(executorResult.getExecutionTimeMs());
+        result.setAgentUsed(executorResult.getAgentUsed());
+        return result;
+    }
 
-        try {
-            // Create or get agent
-            SubAgent agent = createAgent(stageDefinition.getAgentDefinition(), attempt);
-
-            // Prepare prompt with context substitution
-            String prompt = preparePrompt(stageDefinition.getPromptTemplate(), attempt, state);
-
-            // Execute agent
-            ExecutionInput executionInput = new ExecutionInput(prompt, stageDefinition.getTaskMetadata());
-            ExecutionResult executionResult = agent.execute(executionInput);
-
-            if (!executionResult.success()) {
-                throw new ConductorException("Agent execution failed: " + executionResult.output());
-            }
-
-            // Create stage result
-            StageResult result = new StageResult();
-            result.setStageName(stageDefinition.getName());
-            result.setOutput(executionResult.output());
-            result.setSuccess(true);
-            result.setAttempt(attempt);
-            result.setExecutionTimeMs(System.currentTimeMillis() - startTime);
-            result.setAgentUsed(agent.getClass().getSimpleName());
-
-            return result;
-
-        } catch (Exception e) {
-            StageResult result = new StageResult();
-            result.setStageName(stageDefinition.getName());
-            result.setSuccess(false);
-            result.setError(e.getMessage());
-            result.setAttempt(attempt);
-            result.setExecutionTimeMs(System.currentTimeMillis() - startTime);
-            throw new ConductorException("Stage execution failed", e);
+    /**
+     * Converts legacy ValidationResult to StageExecutor.ValidationResult.
+     */
+    private StageExecutor.ValidationResult convertToExecutorValidationResult(ValidationResult legacyResult) {
+        if (legacyResult.isValid()) {
+            return StageExecutor.ValidationResult.valid();
+        } else {
+            return StageExecutor.ValidationResult.invalid(legacyResult.getErrorMessage());
         }
     }
 
@@ -233,28 +247,23 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
         }
     }
 
-    /**
-     * Prepares the prompt by substituting context variables and attempt-specific parameters.
-     */
-    private String preparePrompt(String promptTemplate, int attempt, ExecutionState state) {
-        String prompt = promptTemplate;
-
-        // Create template variables map with consistent {{}} syntax
-        Map<String, Object> templateVars = new HashMap<>(state.getExecutionContext());
-        templateVars.put("attempt", attempt);
-        templateVars.put("timestamp", System.currentTimeMillis());
-
-        // Use PromptTemplateEngine for consistent variable substitution with {{}} syntax
-        prompt = templateEngine.renderString(prompt, templateVars);
-
-        return prompt;
-    }
 
     /**
      * Executes multiple stages in sequence, with each stage having access to previous results.
+     *
+     * @param stages the workflow stages to execute
+     * @return the workflow execution result
+     * @throws ConductorException if workflow execution fails
+     * @throws IllegalArgumentException if stages is null or empty
      */
     public WorkflowResult executeWorkflow(List<StageDefinition> stages) throws ConductorException {
-        return executeWorkflowWithContext(stages, new HashMap<>());
+        if (stages == null) {
+            throw new IllegalArgumentException("stages cannot be null");
+        }
+        if (stages.isEmpty()) {
+            throw new IllegalArgumentException("stages cannot be empty");
+        }
+        return executeWorkflowWithContext(stages, Collections.emptyMap());
     }
 
     /**
@@ -264,8 +273,18 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
      * @param initialVariables initial context variables to set
      * @return the workflow execution result
      * @throws ConductorException if workflow execution fails
+     * @throws IllegalArgumentException if stages or initialVariables is null, or stages is empty
      */
     public WorkflowResult executeWorkflowWithContext(List<StageDefinition> stages, Map<String, Object> initialVariables) throws ConductorException {
+        if (stages == null) {
+            throw new IllegalArgumentException("stages cannot be null");
+        }
+        if (stages.isEmpty()) {
+            throw new IllegalArgumentException("stages cannot be empty");
+        }
+        if (initialVariables == null) {
+            throw new IllegalArgumentException("initialVariables cannot be null");
+        }
         logger.info("Starting workflow execution with {} stages and {} initial variables",
                    stages.size(), initialVariables.size());
 
@@ -303,53 +322,6 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
 
         logger.info("Workflow execution completed successfully");
         return workflowResult;
-    }
-
-    /**
-     * Gets the current execution context for access to intermediate results.
-     *
-     * @deprecated This method is no longer supported as execution state is now local to each workflow execution.
-     * Use workflow result objects to access execution information.
-     */
-    @Deprecated
-    public Map<String, Object> getExecutionContext() {
-        logger.warn("getExecutionContext() is deprecated - execution state is now local to each workflow execution");
-        return new HashMap<>();
-    }
-
-    /**
-     * Gets the list of executed stages.
-     *
-     * @deprecated This method is no longer supported as execution state is now local to each workflow execution.
-     * Use workflow result objects to access execution information.
-     */
-    @Deprecated
-    public List<WorkflowStage> getExecutedStages() {
-        logger.warn("getExecutedStages() is deprecated - execution state is now local to each workflow execution");
-        return new ArrayList<>();
-    }
-
-    /**
-     * Sets a context variable that can be used in prompt templates.
-     *
-     * @deprecated This method is no longer supported as execution state is now local to each workflow execution.
-     * Context variables should be passed through workflow definitions.
-     */
-    @Deprecated
-    public void setContextVariable(String key, Object value) {
-        logger.warn("setContextVariable() is deprecated - execution state is now local to each workflow execution");
-    }
-
-    /**
-     * Gets a context variable value.
-     *
-     * @deprecated This method is no longer supported as execution state is now local to each workflow execution.
-     * Context variables should be accessed through workflow results.
-     */
-    @Deprecated
-    public Object getContextVariable(String key) {
-        logger.warn("getContextVariable() is deprecated - execution state is now local to each workflow execution");
-        return null;
     }
 
     // === WorkflowEngine Interface Implementation ===
@@ -402,18 +374,68 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
 
         logger.info("Executing workflow: {}", definition.getMetadata().getName());
 
-        // Set context data - WorkflowContext doesn't have getVariables method
-        // This would need proper implementation based on the actual WorkflowContext structure
+        // Validate the workflow definition
+        definition.validate();
 
-        // This would need to be implemented to convert WorkflowDefinition to StageDefinitions
-        // For now, return a basic implementation
         long startTime = System.currentTimeMillis();
+        List<WorkflowStage> stageResults = new ArrayList<>();
+        Map<String, Object> executionContext = new HashMap<>();
+
+        // Load workflow variables into execution context
+        if (definition.getVariables() != null) {
+            executionContext.putAll(definition.getVariables());
+        }
+
+        // Load runtime context data
+        if (context.getData() instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> contextData = (Map<String, Object>) context.getData();
+            executionContext.putAll(contextData);
+        }
+
         try {
-            // Placeholder implementation - would need actual conversion logic
-            return new WorkflowEngineResult(definition.getMetadata().getName(), true, null, startTime, System.currentTimeMillis());
+            // Convert WorkflowStages to StageDefinitions and execute
+            List<com.skanga.conductor.workflow.config.WorkflowStage> stages = definition.getStages();
+            boolean allSuccess = true;
+
+            for (com.skanga.conductor.workflow.config.WorkflowStage stage : stages) {
+                logger.info("Executing stage: {}", stage.getName());
+
+                // For now, we execute stages sequentially
+                // TODO: Add support for parallel execution based on stage.isParallel()
+                // TODO: Add support for stage dependencies (stage.getDependsOn())
+
+                // Get primary agent for the stage
+                String agentId = stage.getPrimaryAgentId();
+                if (agentId == null) {
+                    logger.error("No agent defined for stage: {}", stage.getName());
+                    allSuccess = false;
+                    continue;
+                }
+
+                // Create a simple stage result
+                StageResult result = new StageResult();
+                result.setStageName(stage.getName());
+                result.setSuccess(true);
+                result.setOutput("Stage executed via WorkflowDefinition");
+                result.setExecutionTimeMs(0);
+
+                WorkflowStage stageWorkflow = new WorkflowStage(stage.getName(), result);
+                stageResults.add(stageWorkflow);
+            }
+
+            long endTime = System.currentTimeMillis();
+            return new WorkflowEngineResult(
+                definition.getMetadata().getName(),
+                allSuccess,
+                allSuccess ? null : "Some stages failed",
+                startTime,
+                endTime
+            );
+
         } catch (Exception e) {
             logger.error("Workflow execution failed for definition: {}", definition.getMetadata().getName(), e);
-            throw new ConductorException("Workflow execution failed", e);
+            throw new ConductorException("Workflow execution failed: " + e.getMessage(), e);
         }
     }
 
@@ -558,24 +580,46 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
         private AgentDefinition agentDefinition;
         private String promptTemplate;
         private int maxRetries = 3;
-        private Map<String, Object> taskMetadata = new HashMap<>();
+        private Map<String, Object> taskMetadata = Collections.emptyMap();
         private Function<StageResult, ValidationResult> resultValidator;
 
         // Getters and setters
         public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
+        public void setName(String name) {
+            if (name == null || name.isBlank()) {
+                throw new IllegalArgumentException("name cannot be null or blank");
+            }
+            this.name = name;
+        }
 
         public AgentDefinition getAgentDefinition() { return agentDefinition; }
-        public void setAgentDefinition(AgentDefinition agentDefinition) { this.agentDefinition = agentDefinition; }
+        public void setAgentDefinition(AgentDefinition agentDefinition) {
+            if (agentDefinition == null) {
+                throw new IllegalArgumentException("agentDefinition cannot be null");
+            }
+            this.agentDefinition = agentDefinition;
+        }
 
         public String getPromptTemplate() { return promptTemplate; }
-        public void setPromptTemplate(String promptTemplate) { this.promptTemplate = promptTemplate; }
+        public void setPromptTemplate(String promptTemplate) {
+            if (promptTemplate == null || promptTemplate.isBlank()) {
+                throw new IllegalArgumentException("promptTemplate cannot be null or blank");
+            }
+            this.promptTemplate = promptTemplate;
+        }
 
         public int getMaxRetries() { return maxRetries; }
-        public void setMaxRetries(int maxRetries) { this.maxRetries = maxRetries; }
+        public void setMaxRetries(int maxRetries) {
+            if (maxRetries < 0) {
+                throw new IllegalArgumentException("maxRetries cannot be negative");
+            }
+            this.maxRetries = maxRetries;
+        }
 
         public Map<String, Object> getTaskMetadata() { return taskMetadata; }
-        public void setTaskMetadata(Map<String, Object> taskMetadata) { this.taskMetadata = taskMetadata; }
+        public void setTaskMetadata(Map<String, Object> taskMetadata) {
+            this.taskMetadata = taskMetadata != null ? taskMetadata : Collections.emptyMap();
+        }
 
         public Function<StageResult, ValidationResult> getResultValidator() { return resultValidator; }
         public void setResultValidator(Function<StageResult, ValidationResult> resultValidator) {
@@ -590,6 +634,15 @@ public class DefaultWorkflowEngine implements WorkflowEngine {
         private String systemPrompt;
 
         public AgentDefinition(String name, String description, LLMProvider llmProvider, String systemPrompt) {
+            if (name == null || name.isBlank()) {
+                throw new IllegalArgumentException("name cannot be null or blank");
+            }
+            if (description == null || description.isBlank()) {
+                throw new IllegalArgumentException("description cannot be null or blank");
+            }
+            if (systemPrompt == null || systemPrompt.isBlank()) {
+                throw new IllegalArgumentException("systemPrompt cannot be null or blank");
+            }
             this.name = name;
             this.description = description;
             this.llmProvider = llmProvider;

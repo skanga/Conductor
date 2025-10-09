@@ -537,7 +537,23 @@ class YamlWorkflowEngineEnhancedTest {
     private void setupBasicMocks() {
         lenient().when(mockWorkflowDefinition.getMetadata()).thenReturn(mockMetadata);
         lenient().when(mockWorkflowDefinition.getSettings()).thenReturn(mockSettings);
-        lenient().when(mockWorkflowDefinition.getStages()).thenReturn(Collections.emptyList());
+
+        // Create a minimal valid stage to pass validation
+        com.skanga.conductor.workflow.config.WorkflowStage mockStage = mock(com.skanga.conductor.workflow.config.WorkflowStage.class);
+        lenient().when(mockStage.getName()).thenReturn("test-stage");
+        lenient().when(mockStage.getPrimaryAgentId()).thenReturn("test-agent");
+        lenient().when(mockStage.getDependsOn()).thenReturn(null);
+        lenient().when(mockStage.getRetryLimit()).thenReturn(3);
+
+        // Create a complete agent definition mock
+        AgentDefinition mockAgentDef = mock(AgentDefinition.class);
+        lenient().when(mockAgentDef.getType()).thenReturn("llm");
+        lenient().when(mockAgentDef.getPromptTemplate()).thenReturn("Test prompt {{input}}");
+
+        // Mock agent config to recognize the test agent
+        lenient().when(mockAgentConfig.getAgent("test-agent")).thenReturn(Optional.of(mockAgentDef));
+
+        lenient().when(mockWorkflowDefinition.getStages()).thenReturn(Collections.singletonList(mockStage));
         lenient().when(mockMetadata.getName()).thenReturn("test-workflow");
         lenient().when(mockMetadata.getVersion()).thenReturn("1.0");
 
@@ -558,7 +574,7 @@ class YamlWorkflowEngineEnhancedTest {
         String content = """
             workflow:
               name: test-workflow
-              version: 1.0
+              version: "1.0"
               description: Test workflow
             stages:
               - name: test-stage

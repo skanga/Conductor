@@ -1,5 +1,7 @@
 package com.skanga.conductor.memory;
 
+import com.skanga.conductor.config.ApplicationConfig;
+import com.skanga.conductor.config.MemoryConfig;
 import com.skanga.conductor.utils.ValidationUtils;
 import com.skanga.conductor.metrics.MetricsRegistry;
 import org.slf4j.Logger;
@@ -46,15 +48,15 @@ public class MemoryManager implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(MemoryManager.class);
 
-    // Memory thresholds
-    private static final double WARNING_THRESHOLD = 0.70; // 70%
-    private static final double CRITICAL_THRESHOLD = 0.85; // 85%
-    private static final double EMERGENCY_THRESHOLD = 0.95; // 95%
+    // Memory thresholds - configurable via MemoryConfig
+    private final double warningThreshold;
+    private final double criticalThreshold;
+    private final double emergencyThreshold;
 
-    // Cleanup intervals
-    private static final long MONITORING_INTERVAL_MS = 30_000; // 30 seconds
-    private static final long CLEANUP_INTERVAL_MS = 300_000; // 5 minutes
-    private static final long RESOURCE_EXPIRY_MS = 3600_000; // 1 hour
+    // Cleanup intervals - configurable via MemoryConfig
+    private final long monitoringIntervalMs;
+    private final long cleanupIntervalMs;
+    private final long resourceExpiryMs;
 
     private final MemoryMXBean memoryBean;
     private final MetricsRegistry metricsRegistry;
@@ -62,10 +64,8 @@ public class MemoryManager implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final AtomicLong lastCleanupTime = new AtomicLong(System.currentTimeMillis());
 
-    // Tracked resources for cleanup
-    private final Map<String, CleanupTask> cleanupTasks = new ConcurrentHashMap<>();
-    private final Map<String, WeakReference<AutoCloseable>> weakReferences = new ConcurrentHashMap<>();
-    private final Queue<TimestampedResource> expirableResources = new ConcurrentLinkedQueue<>();
+    // Delegated resource tracking
+    private final ResourceTracker resourceTracker;
 
     // Memory usage tracking
     private volatile double lastMemoryUsage = 0.0;
@@ -92,19 +92,46 @@ public class MemoryManager implements AutoCloseable {
     }
 
     /**
-     * Creates a new MemoryManager instance.
+     * Creates a new MemoryManager instance with default dependencies.
      */
     public MemoryManager() {
+        this(new ResourceTracker(), MetricsRegistry.getInstance());
+    }
+
+    /**
+     * Creates a new MemoryManager instance with injected dependencies.
+     * <p>
+     * This constructor is preferred for testing and when you need to control
+     * the dependencies.
+     * </p>
+     *
+     * @param resourceTracker the resource tracker for managing cleanup tasks
+     * @param metricsRegistry the metrics registry for recording metrics
+     */
+    public MemoryManager(ResourceTracker resourceTracker, MetricsRegistry metricsRegistry) {
         this.memoryBean = ManagementFactory.getMemoryMXBean();
-        this.metricsRegistry = MetricsRegistry.getInstance();
-        this.scheduler = Executors.newScheduledThreadPool(2, r -> {
+        this.metricsRegistry = metricsRegistry;
+        this.resourceTracker = resourceTracker;
+
+        // Load configuration from MemoryConfig
+        MemoryConfig config = ApplicationConfig.getInstance().getMemoryConfig();
+        this.warningThreshold = config.getMemoryWarningThreshold();
+        this.criticalThreshold = config.getMemoryCriticalThreshold();
+        this.emergencyThreshold = config.getMemoryEmergencyThreshold();
+        this.monitoringIntervalMs = config.getMemoryMonitoringInterval().toMillis();
+        this.cleanupIntervalMs = config.getMemoryCleanupInterval().toMillis();
+        this.resourceExpiryMs = config.getResourceExpiryTime().toMillis();
+        int threadPoolSize = config.getMemoryManagerThreadPoolSize();
+
+        this.scheduler = Executors.newScheduledThreadPool(threadPoolSize, r -> {
             Thread t = new Thread(r, "MemoryManager");
             t.setDaemon(true);
             return t;
         });
 
         startBackgroundTasks();
-        logger.info("MemoryManager initialized with monitoring enabled");
+        logger.info("MemoryManager initialized with monitoring enabled (warning={}%, critical={}%, emergency={}%)",
+            warningThreshold * 100, criticalThreshold * 100, emergencyThreshold * 100);
     }
 
     /**
@@ -119,11 +146,7 @@ public class MemoryManager implements AutoCloseable {
      * @throws IllegalArgumentException if name is null/blank or task is null
      */
     public void registerCleanupTask(String name, CleanupTask task) {
-        ValidationUtils.requireNonBlank(name, "task name");
-        ValidationUtils.requireNonNull(task, "cleanup task");
-
-        cleanupTasks.put(name, task);
-        logger.debug("Registered cleanup task: {}", name);
+        resourceTracker.registerCleanupTask(name, task);
     }
 
     /**
@@ -133,12 +156,7 @@ public class MemoryManager implements AutoCloseable {
      * @return true if a task was removed
      */
     public boolean unregisterCleanupTask(String name) {
-        ValidationUtils.requireNonBlank(name, "task name");
-        boolean removed = cleanupTasks.remove(name) != null;
-        if (removed) {
-            logger.debug("Unregistered cleanup task: {}", name);
-        }
-        return removed;
+        return resourceTracker.unregisterCleanupTask(name);
     }
 
     /**
@@ -153,11 +171,7 @@ public class MemoryManager implements AutoCloseable {
      * @throws IllegalArgumentException if name is null/blank or resource is null
      */
     public void registerResource(String name, AutoCloseable resource) {
-        ValidationUtils.requireNonBlank(name, "resource name");
-        ValidationUtils.requireNonNull(resource, "resource");
-
-        weakReferences.put(name, new WeakReference<>(resource));
-        logger.debug("Registered weak reference for resource: {}", name);
+        resourceTracker.registerResource(name, resource);
     }
 
     /**
@@ -172,15 +186,7 @@ public class MemoryManager implements AutoCloseable {
      * @throws IllegalArgumentException if resource is null or expiration is in the past
      */
     public void registerExpirableResource(AutoCloseable resource, Instant expirationTime) {
-        ValidationUtils.requireNonNull(resource, "resource");
-        ValidationUtils.requireNonNull(expirationTime, "expiration time");
-
-        if (expirationTime.isBefore(Instant.now())) {
-            throw new IllegalArgumentException("expiration time cannot be in the past");
-        }
-
-        expirableResources.offer(new TimestampedResource(resource, expirationTime));
-        logger.debug("Registered expirable resource with expiration: {}", expirationTime);
+        resourceTracker.registerExpirableResource(resource, expirationTime);
     }
 
     /**
@@ -202,18 +208,27 @@ public class MemoryManager implements AutoCloseable {
 
         try {
             // Clean up expired resources first
-            cleanupExpiredResources();
+            resourceTracker.cleanupExpiredResources();
 
             // Clean up weak references
-            cleanupWeakReferences();
+            resourceTracker.cleanupWeakReferences();
 
             // Execute registered cleanup tasks
-            executeCleanupTasks(aggressive);
+            resourceTracker.executeCleanupTasks(aggressive);
 
             // Suggest garbage collection
             if (aggressive) {
                 System.gc();
-                Thread.sleep(100); // Give GC time to run
+                // Schedule delayed memory check instead of blocking
+                // This allows cleanup thread to continue working while GC runs
+                long gcDelay = getGcSleepDelay();
+                if (gcDelay > 0) {
+                    // Schedule async check instead of blocking
+                    scheduler.schedule(() -> {
+                        double memoryAfterGC = getCurrentMemoryUsage();
+                        logger.debug("Post-GC memory usage: {:.1f}%", memoryAfterGC * 100);
+                    }, gcDelay, java.util.concurrent.TimeUnit.MILLISECONDS);
+                }
             }
 
             double memoryAfter = getCurrentMemoryUsage();
@@ -278,9 +293,9 @@ public class MemoryManager implements AutoCloseable {
             nonHeapUsage.getUsed(),
             getCurrentMemoryUsage(),
             currentState,
-            cleanupTasks.size(),
-            weakReferences.size(),
-            expirableResources.size(),
+            resourceTracker.getCleanupTaskCount(),
+            resourceTracker.getWeakReferenceCount(),
+            resourceTracker.getExpirableResourceCount(),
             lastCleanupTime.get()
         );
     }
@@ -291,7 +306,7 @@ public class MemoryManager implements AutoCloseable {
      * @return true if memory usage is critical
      */
     public boolean isMemoryPressureHigh() {
-        return getCurrentMemoryUsage() >= CRITICAL_THRESHOLD;
+        return getCurrentMemoryUsage() >= criticalThreshold;
     }
 
     /**
@@ -303,7 +318,7 @@ public class MemoryManager implements AutoCloseable {
      */
     public void emergencyCleanup() {
         double memoryUsage = getCurrentMemoryUsage();
-        if (memoryUsage >= EMERGENCY_THRESHOLD) {
+        if (memoryUsage >= emergencyThreshold) {
             logger.warn("Emergency memory cleanup triggered - memory usage: {:.1f}%", memoryUsage * 100);
             performCleanup(true);
         }
@@ -337,16 +352,16 @@ public class MemoryManager implements AutoCloseable {
         // Memory monitoring task
         scheduler.scheduleAtFixedRate(
             this::monitorMemoryUsage,
-            MONITORING_INTERVAL_MS,
-            MONITORING_INTERVAL_MS,
+            monitoringIntervalMs,
+            monitoringIntervalMs,
             TimeUnit.MILLISECONDS
         );
 
         // Periodic cleanup task
         scheduler.scheduleAtFixedRate(
             () -> performCleanup(false),
-            CLEANUP_INTERVAL_MS,
-            CLEANUP_INTERVAL_MS,
+            cleanupIntervalMs,
+            cleanupIntervalMs,
             TimeUnit.MILLISECONDS
         );
     }
@@ -376,10 +391,10 @@ public class MemoryManager implements AutoCloseable {
             );
 
             // Trigger cleanup if memory usage is high
-            if (memoryUsage >= CRITICAL_THRESHOLD) {
+            if (memoryUsage >= criticalThreshold) {
                 long timeSinceLastCleanup = System.currentTimeMillis() - lastCleanupTime.get();
                 if (timeSinceLastCleanup > 60_000) { // Don't cleanup too frequently
-                    performCleanup(memoryUsage >= EMERGENCY_THRESHOLD);
+                    performCleanup(memoryUsage >= emergencyThreshold);
                 }
             }
 
@@ -392,77 +407,29 @@ public class MemoryManager implements AutoCloseable {
      * Determines memory state based on usage percentage.
      */
     private MemoryState determineMemoryState(double memoryUsage) {
-        if (memoryUsage >= EMERGENCY_THRESHOLD) {
+        if (memoryUsage >= emergencyThreshold) {
             return MemoryState.EMERGENCY;
-        } else if (memoryUsage >= CRITICAL_THRESHOLD) {
+        } else if (memoryUsage >= criticalThreshold) {
             return MemoryState.CRITICAL;
-        } else if (memoryUsage >= WARNING_THRESHOLD) {
+        } else if (memoryUsage >= warningThreshold) {
             return MemoryState.WARNING;
         } else {
             return MemoryState.NORMAL;
         }
     }
 
-    /**
-     * Cleans up expired resources.
-     */
-    private void cleanupExpiredResources() {
-        Instant now = Instant.now();
-        int cleanedCount = 0;
-
-        TimestampedResource resource;
-        while ((resource = expirableResources.peek()) != null) {
-            if (resource.expirationTime.isAfter(now)) {
-                break; // Resources are ordered by expiration time
-            }
-
-            expirableResources.poll();
-            try {
-                resource.resource.close();
-                cleanedCount++;
-            } catch (Exception e) {
-                logger.debug("Error closing expired resource", e);
-            }
-        }
-
-        if (cleanedCount > 0) {
-            logger.debug("Cleaned up {} expired resources", cleanedCount);
-        }
-    }
 
     /**
-     * Cleans up weak references that have been garbage collected.
+     * Gets the GC sleep delay from configuration.
      */
-    private void cleanupWeakReferences() {
-        int cleanedCount = 0;
-        Iterator<Map.Entry<String, WeakReference<AutoCloseable>>> iterator =
-            weakReferences.entrySet().iterator();
-
-        while (iterator.hasNext()) {
-            Map.Entry<String, WeakReference<AutoCloseable>> entry = iterator.next();
-            AutoCloseable resource = entry.getValue().get();
-
-            if (resource == null) {
-                iterator.remove();
-                cleanedCount++;
-            }
-        }
-
-        if (cleanedCount > 0) {
-            logger.debug("Cleaned up {} garbage collected weak references", cleanedCount);
-        }
-    }
-
-    /**
-     * Executes all registered cleanup tasks.
-     */
-    private void executeCleanupTasks(boolean aggressive) {
-        for (Map.Entry<String, CleanupTask> entry : cleanupTasks.entrySet()) {
-            try {
-                entry.getValue().cleanup(aggressive);
-            } catch (Exception e) {
-                logger.warn("Error executing cleanup task '{}': {}", entry.getKey(), e.getMessage());
-            }
+    private long getGcSleepDelay() {
+        try {
+            return com.skanga.conductor.config.ApplicationConfig.getInstance()
+                .getToolConfig()
+                .getMemoryGcSleepDelay();
+        } catch (Exception e) {
+            // Fallback if config is not available
+            return 100;
         }
     }
 
@@ -511,18 +478,6 @@ public class MemoryManager implements AutoCloseable {
         void cleanup(boolean aggressive) throws Exception;
     }
 
-    /**
-     * Resource with expiration timestamp.
-     */
-    private static class TimestampedResource {
-        final AutoCloseable resource;
-        final Instant expirationTime;
-
-        TimestampedResource(AutoCloseable resource, Instant expirationTime) {
-            this.resource = resource;
-            this.expirationTime = expirationTime;
-        }
-    }
 
     /**
      * Memory usage statistics.

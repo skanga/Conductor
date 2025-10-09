@@ -14,11 +14,11 @@ public class ExceptionContextTest {
     @Test
     void testBasicContextCreation() {
         ExceptionContext context = ExceptionContext.of(
-                ErrorCodes.LLM_RATE_LIMIT_EXCEEDED,
+                ErrorCodes.RATE_LIMIT_EXCEEDED,
                 ExceptionContext.ErrorCategory.RATE_LIMIT
         );
 
-        assertEquals(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED, context.getErrorCode());
+        assertEquals(ErrorCodes.RATE_LIMIT_EXCEEDED, context.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.RATE_LIMIT, context.getCategory());
         assertNotNull(context.getTimestamp());
     }
@@ -27,7 +27,7 @@ public class ExceptionContextTest {
     void testFullContextBuilder() {
         Instant timestamp = Instant.now();
         ExceptionContext context = ExceptionContext.builder()
-                .errorCode(ErrorCodes.TOOL_EXECUTION_FAILED)
+                .errorCode(ErrorCodes.EXECUTION_FAILED)
                 .category(ExceptionContext.ErrorCategory.BUSINESS_LOGIC)
                 .operation("file_read")
                 .timestamp(timestamp)
@@ -40,7 +40,7 @@ public class ExceptionContextTest {
                 .metadata("tool.type", "io")
                 .build();
 
-        assertEquals(ErrorCodes.TOOL_EXECUTION_FAILED, context.getErrorCode());
+        assertEquals(ErrorCodes.EXECUTION_FAILED, context.getErrorCode());
         assertEquals(ExceptionContext.ErrorCategory.BUSINESS_LOGIC, context.getCategory());
         assertEquals("file_read", context.getOperation());
         assertEquals(timestamp, context.getTimestamp());
@@ -58,7 +58,7 @@ public class ExceptionContextTest {
     void testRetryableDetection() {
         // Retryable context
         ExceptionContext retryableContext = ExceptionContext.builder()
-                .errorCode(ErrorCodes.LLM_TIMEOUT_REQUEST)
+                .errorCode(ErrorCodes.TIMEOUT)
                 .recoveryHint(ExceptionContext.RecoveryHint.RETRY_WITH_BACKOFF)
                 .build();
 
@@ -66,7 +66,7 @@ public class ExceptionContextTest {
 
         // Non-retryable context
         ExceptionContext nonRetryableContext = ExceptionContext.builder()
-                .errorCode(ErrorCodes.CONFIG_PROPERTY_MISSING)
+                .errorCode(ErrorCodes.CONFIGURATION_ERROR)
                 .recoveryHint(ExceptionContext.RecoveryHint.FIX_CONFIGURATION)
                 .build();
 
@@ -76,7 +76,7 @@ public class ExceptionContextTest {
     @Test
     void testFallbackSuggestion() {
         ExceptionContext context = ExceptionContext.builder()
-                .errorCode(ErrorCodes.TOOL_NOT_FOUND)
+                .errorCode(ErrorCodes.NOT_FOUND)
                 .recoveryHint(ExceptionContext.RecoveryHint.USE_FALLBACK)
                 .build();
 
@@ -103,7 +103,7 @@ public class ExceptionContextTest {
     @Test
     void testSummaryGeneration() {
         ExceptionContext context = ExceptionContext.builder()
-                .errorCode(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED)
+                .errorCode(ErrorCodes.RATE_LIMIT_EXCEEDED)
                 .category(ExceptionContext.ErrorCategory.RATE_LIMIT)
                 .operation("generate_completion")
                 .duration(2500L)
@@ -112,7 +112,7 @@ public class ExceptionContextTest {
 
         String summary = context.getSummary();
 
-        assertTrue(summary.contains(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED));
+        assertTrue(summary.contains(ErrorCodes.RATE_LIMIT_EXCEEDED));
         assertTrue(summary.contains("RATE_LIMIT"));
         assertTrue(summary.contains("generate_completion"));
         assertTrue(summary.contains("2500ms"));
@@ -122,28 +122,15 @@ public class ExceptionContextTest {
     @Test
     void testErrorCodeCategoryMapping() {
         assertEquals(ExceptionContext.ErrorCategory.RATE_LIMIT,
-                ErrorCodes.getCategoryForCode(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED));
+                ErrorCodes.toExceptionContextCategory(ErrorCodes.RATE_LIMIT_EXCEEDED));
         assertEquals(ExceptionContext.ErrorCategory.TIMEOUT,
-                ErrorCodes.getCategoryForCode(ErrorCodes.LLM_TIMEOUT_REQUEST));
+                ErrorCodes.toExceptionContextCategory(ErrorCodes.TIMEOUT));
         assertEquals(ExceptionContext.ErrorCategory.AUTHENTICATION,
-                ErrorCodes.getCategoryForCode(ErrorCodes.LLM_AUTH_INVALID_KEY));
+                ErrorCodes.toExceptionContextCategory(ErrorCodes.AUTH_FAILED));
         assertEquals(ExceptionContext.ErrorCategory.CONFIGURATION,
-                ErrorCodes.getCategoryForCode(ErrorCodes.CONFIG_PROPERTY_MISSING));
-        assertEquals(ExceptionContext.ErrorCategory.USER_INTERACTION,
-                ErrorCodes.getCategoryForCode(ErrorCodes.APPROVAL_TIMEOUT));
-    }
-
-    @Test
-    void testRecoveryHintMapping() {
-        assertEquals(ExceptionContext.RecoveryHint.WAIT_RATE_LIMIT,
-                ErrorCodes.getRecoveryHintForCode(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED));
-        assertEquals(ExceptionContext.RecoveryHint.CHECK_CREDENTIALS,
-                ErrorCodes.getRecoveryHintForCode(ErrorCodes.LLM_AUTH_INVALID_KEY));
-        assertEquals(ExceptionContext.RecoveryHint.INCREASE_TIMEOUT,
-                ErrorCodes.getRecoveryHintForCode(ErrorCodes.LLM_TIMEOUT_REQUEST));
-        assertEquals(ExceptionContext.RecoveryHint.USE_FALLBACK,
-                ErrorCodes.getRecoveryHintForCode(ErrorCodes.TOOL_NOT_FOUND));
-        assertEquals(ExceptionContext.RecoveryHint.FIX_CONFIGURATION,
-                ErrorCodes.getRecoveryHintForCode(ErrorCodes.CONFIG_PROPERTY_MISSING));
+                ErrorCodes.toExceptionContextCategory(ErrorCodes.CONFIGURATION_ERROR));
+        // TIMEOUT maps to TIMEOUT category
+        assertEquals(ExceptionContext.ErrorCategory.TIMEOUT,
+                ErrorCodes.toExceptionContextCategory(ErrorCodes.TIMEOUT));
     }
 }

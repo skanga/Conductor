@@ -456,7 +456,7 @@ public final class ConfigurationAccessor {
      * @return the provider configuration
      * @throws IllegalArgumentException if providerName is null or blank
      */
-    public static ApplicationConfig.ProviderConfig getProviderConfig(String providerName) {
+    public static LLMConfig.ProviderConfig getProviderConfig(String providerName) {
         ValidationUtils.requireNonBlank(providerName, "provider name");
         return getConfig().getLLMConfig().getProviderConfig(providerName);
     }
@@ -468,7 +468,7 @@ public final class ConfigurationAccessor {
      *
      * @return the database configuration instance
      */
-    public static ApplicationConfig.DatabaseConfig getDatabaseConfig() {
+    public static DatabaseConfig getDatabaseConfig() {
         return getConfig().getDatabaseConfig();
     }
 
@@ -477,7 +477,7 @@ public final class ConfigurationAccessor {
      *
      * @return the tool configuration instance
      */
-    public static ApplicationConfig.ToolConfig getToolConfig() {
+    public static ToolConfig getToolConfig() {
         return getConfig().getToolConfig();
     }
 
@@ -486,7 +486,7 @@ public final class ConfigurationAccessor {
      *
      * @return the LLM configuration instance
      */
-    public static ApplicationConfig.LLMConfig getLLMConfig() {
+    public static LLMConfig getLLMConfig() {
         return getConfig().getLLMConfig();
     }
 
@@ -495,7 +495,7 @@ public final class ConfigurationAccessor {
      *
      * @return the memory configuration instance
      */
-    public static ApplicationConfig.MemoryConfig getMemoryConfig() {
+    public static MemoryConfig getMemoryConfig() {
         return getConfig().getMemoryConfig();
     }
 
@@ -504,7 +504,7 @@ public final class ConfigurationAccessor {
      *
      * @return the metrics configuration instance
      */
-    public static ApplicationConfig.MetricsConfig getMetricsConfig() {
+    public static MetricsConfig getMetricsConfig() {
         return getConfig().getMetricsConfig();
     }
 }

@@ -1,5 +1,6 @@
 package com.skanga.conductor.orchestration;
 
+import com.skanga.conductor.agent.AgentCreator;
 import com.skanga.conductor.agent.ConversationalAgent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +45,7 @@ import java.util.UUID;
  * @see MemoryStore
  * @see PlannerOrchestrator
  */
-public class Orchestrator {
+public class Orchestrator implements AgentCreator {
 
     private static final Logger logger = LoggerFactory.getLogger(Orchestrator.class);
 

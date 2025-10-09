@@ -115,7 +115,7 @@ mvn clean install && mvn exec:java@book-demo -Dexec.args="Quick Demo"
 
 ### Development Setup
 
-For comprehensive development environment setup including IDE configuration, testing setup, and troubleshooting guides, see **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)**.
+For comprehensive development environment setup including IDE configuration, testing setup, and troubleshooting guides, see **[DEVELOPMENT.md](DEVELOPMENT.md#development-environment-setup)**.
 
 #### Prerequisites
 
@@ -208,7 +208,7 @@ mvn clean install
 - **VS Code**: Install Java Extension Pack, configure workspace settings
 - **Eclipse**: Import as Existing Maven Project
 
-See **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)** for detailed IDE configuration guides.
+See **[DEVELOPMENT.md#ide-configuration](DEVELOPMENT.md#ide-configuration)** for detailed IDE configuration guides.
 
 ### Testing
 
@@ -308,12 +308,12 @@ mvn test -Dtest=PromptTemplateEnginePerformanceTest -Dtest.performance.enabled=t
 
 | Issue | Solution | Reference |
 |-------|----------|-----------|
-| `UnsupportedClassVersionError` | Verify Java 21+ with `java --version` | [Setup Guide](DEVELOPER_SETUP.md#java-installation-options) |
-| `OutOfMemoryError` | Increase Maven memory: `export MAVEN_OPTS="-Xmx4g"` | [Troubleshooting](DEVELOPER_SETUP.md#troubleshooting-guide) |
-| Tests fail with DB locks | Clean test databases: `find target -name "*.db" -delete` | [Testing Guide](TESTING.md) |
+| `UnsupportedClassVersionError` | Verify Java 21+ with `java --version` | [Setup Guide](DEVELOPMENT.md#java-installation-options) |
+| `OutOfMemoryError` | Increase Maven memory: `export MAVEN_OPTS="-Xmx4g"` | [Troubleshooting](DEVELOPMENT.md#troubleshooting-guide) |
+| Tests fail with DB locks | Clean test databases: `find target -name "*.db" -delete` | [Testing Guide](DEVELOPMENT.md#testing-strategies) |
 | Build hangs during tests | Skip tests: `mvn install -DskipTests` or disable performance tests (default) | [Performance Testing](#performance-testing) |
 
-For comprehensive troubleshooting including IDE issues, environment problems, and debugging techniques, see **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md#troubleshooting-guide)**.
+For comprehensive troubleshooting including IDE issues, environment problems, and debugging techniques, see **[DEVELOPMENT.md#troubleshooting-guide](DEVELOPMENT.md#troubleshooting-guide)**.
 
 ## Project Structure
 
@@ -400,7 +400,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for comprehensive configuration documen
 
 ## Architecture Components
 
-See [TECHNICAL_FEATURES.md](TECHNICAL_FEATURES.md) for detailed information about advanced technical features including thread safety, templating system, and text-to-speech integration.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed information about the framework architecture, unified workflow system, advanced technical features including thread safety, security, memory management, templating system, and text-to-speech integration.
 
 ## Contributing
 

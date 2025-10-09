@@ -27,7 +27,7 @@ class WorkflowConfigLoaderTest {
         // Given
         String yamlContent = """
             workflow:
-              name: "Test Workflow"
+              name: "test-workflow"
               description: "A test workflow"
               version: "1.0.0"
             settings:
@@ -51,7 +51,7 @@ class WorkflowConfigLoaderTest {
 
         // Then
         assertNotNull(workflow);
-        assertEquals("Test Workflow", workflow.getMetadata().getName());
+        assertEquals("test-workflow", workflow.getMetadata().getName());
         assertEquals("A test workflow", workflow.getMetadata().getDescription());
         assertEquals("1.0.0", workflow.getMetadata().getVersion());
         assertEquals("./output", workflow.getSettings().getOutputDir());
@@ -158,17 +158,18 @@ class WorkflowConfigLoaderTest {
         // Given
         String invalidYamlContent = """
             workflow:
-              name: "Test Workflow"
+              name: "test-workflow"
               # Missing required fields like stages
             """;
 
         Path workflowFile = tempDir.resolve("invalid-workflow.yaml");
         Files.writeString(workflowFile, invalidYamlContent);
 
-        // When & Then
+        // When & Then - Schema validation catches missing 'stages'
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
             () -> loader.loadWorkflow(workflowFile.toString()));
-        assertTrue(exception.getMessage().contains("Invalid workflow configuration"));
+        assertTrue(exception.getMessage().contains("schema validation failed") ||
+                   exception.getMessage().contains("Invalid workflow configuration"));
     }
 
     @Test
@@ -220,10 +221,11 @@ class WorkflowConfigLoaderTest {
         Path workflowFile = tempDir.resolve("malformed-workflow.yaml");
         Files.writeString(workflowFile, malformedYaml);
 
-        // When & Then
-        IOException exception = assertThrows(IOException.class,
+        // When & Then - Schema validation now throws IllegalArgumentException
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
             () -> loader.loadWorkflow(workflowFile.toString()));
-        assertTrue(exception.getMessage().contains("Failed to parse workflow"));
+        assertTrue(exception.getMessage().contains("schema validation failed") ||
+                   exception.getMessage().contains("Failed to parse YAML"));
     }
 
     @Test
@@ -231,7 +233,7 @@ class WorkflowConfigLoaderTest {
         // Given
         String minimalYamlContent = """
             workflow:
-              name: "Minimal Workflow"
+              name: "minimal-workflow"
             stages:
               - name: "minimal-stage"
                 agents:
@@ -246,7 +248,7 @@ class WorkflowConfigLoaderTest {
 
         // Then
         assertNotNull(workflow);
-        assertEquals("Minimal Workflow", workflow.getMetadata().getName());
+        assertEquals("minimal-workflow", workflow.getMetadata().getName());
         assertNotNull(workflow.getSettings()); // Should use defaults
         assertEquals(3, workflow.getSettings().getMaxRetries()); // Default value
         assertEquals(1, workflow.getStages().size());

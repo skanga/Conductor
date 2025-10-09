@@ -1,11 +1,11 @@
 package com.skanga.conductor.workflow.templates;
 
+import com.skanga.conductor.agent.AgentCreator;
 import com.skanga.conductor.agent.SubAgent;
 import com.skanga.conductor.agent.ConversationalAgent;
 import com.skanga.conductor.exception.ConductorException;
 import com.skanga.conductor.memory.MemoryStore;
 import com.skanga.conductor.workflow.config.AgentDefinition;
-import com.skanga.conductor.orchestration.Orchestrator;
 import com.skanga.conductor.provider.LLMProvider;
 import com.skanga.conductor.tools.*;
 import org.slf4j.Logger;
@@ -35,19 +35,19 @@ public class AgentFactory {
     }
 
     /**
-     * Creates an agent based on its definition and orchestrator.
+     * Creates an agent based on its definition and agent creator.
      * <p>
      * IMPORTANT: All agents created by this factory share the same MemoryStore instance
-     * as the orchestrator to ensure consistent memory access across workflow agents.
+     * as the agent creator to ensure consistent memory access across workflow agents.
      * This prevents memory isolation issues where agents cannot access shared context.
      * </p>
      */
-    public SubAgent createAgent(AgentDefinition definition, Orchestrator orchestrator) throws ConductorException {
+    public SubAgent createAgent(AgentDefinition definition, AgentCreator agentCreator) throws ConductorException {
         if (definition == null) {
             throw new IllegalArgumentException("Agent definition cannot be null");
         }
-        if (orchestrator == null) {
-            throw new IllegalArgumentException("Orchestrator cannot be null");
+        if (agentCreator == null) {
+            throw new IllegalArgumentException("Agent creator cannot be null");
         }
 
         String agentType = definition.getType();
@@ -59,9 +59,9 @@ public class AgentFactory {
 
         switch (agentType.toLowerCase()) {
             case "llm":
-                return createLLMAgent(definition, orchestrator);
+                return createLLMAgent(definition, agentCreator);
             case "tool":
-                return createToolAgent(definition, orchestrator);
+                return createToolAgent(definition, agentCreator);
             default:
                 throw new ConductorException("Unsupported agent type: " + agentType);
         }
@@ -70,7 +70,7 @@ public class AgentFactory {
     /**
      * Creates an LLM-based agent.
      */
-    private SubAgent createLLMAgent(AgentDefinition definition, Orchestrator orchestrator) throws ConductorException {
+    private SubAgent createLLMAgent(AgentDefinition definition, AgentCreator agentCreator) throws ConductorException {
         String agentId = generateAgentId(definition);
         String role = definition.getRole();
 
@@ -90,7 +90,7 @@ public class AgentFactory {
         String simplePrompt = "Agent role: " + role;
 
         try {
-            SubAgent agent = orchestrator.createImplicitAgent(agentId, role, llmProvider, simplePrompt);
+            SubAgent agent = agentCreator.createImplicitAgent(agentId, role, llmProvider, simplePrompt);
             logger.info("Created LLM agent: {} ({})", agentId, role);
             return agent;
         } catch (java.sql.SQLException e) {
@@ -101,7 +101,7 @@ public class AgentFactory {
     /**
      * Creates a tool-based agent.
      */
-    private SubAgent createToolAgent(AgentDefinition definition, Orchestrator orchestrator) throws ConductorException {
+    private SubAgent createToolAgent(AgentDefinition definition, AgentCreator agentCreator) throws ConductorException {
         String agentId = generateAgentId(definition);
         String role = definition.getRole();
 
@@ -118,13 +118,13 @@ public class AgentFactory {
                 case "llm-tool":
                     // Create LLMToolAgent - uses LLM to determine which tools to call
                     LLMProvider llmProvider = getDefaultLLMProvider();
-                    agent = createLLMToolAgent(agentId, role, llmProvider, orchestrator);
+                    agent = createLLMToolAgent(agentId, role, llmProvider, agentCreator);
                     logger.info("Created LLM-Tool agent: {} ({})", agentId, role);
                     break;
 
                 case "direct-tool":
                     // Create ToolUsingAgent - calls tools directly based on prompt patterns
-                    agent = createDirectToolAgent(agentId, role, orchestrator);
+                    agent = createDirectToolAgent(agentId, role, agentCreator);
                     logger.info("Created Direct-Tool agent: {} ({})", agentId, role);
                     break;
 
@@ -140,17 +140,17 @@ public class AgentFactory {
     }
 
     /**
-     * Creates an LLMToolAgent using the orchestrator's shared memory store.
+     * Creates an LLMToolAgent using the agent creator's shared memory store.
      * <p>
-     * This method now properly uses the orchestrator's shared MemoryStore to ensure
+     * This method now properly uses the agent creator's shared MemoryStore to ensure
      * memory consistency between agents. All agents created through workflows will
      * share the same memory context, enabling proper inter-agent communication.
      * </p>
      */
-    private SubAgent createLLMToolAgent(String agentId, String role, LLMProvider llmProvider, Orchestrator orchestrator) throws ConductorException {
+    private SubAgent createLLMToolAgent(String agentId, String role, LLMProvider llmProvider, AgentCreator agentCreator) throws ConductorException {
         try {
-            // Use the orchestrator's shared memory store to ensure consistency
-            MemoryStore sharedMemoryStore = orchestrator.getMemoryStore();
+            // Use the agent creator's shared memory store to ensure consistency
+            MemoryStore sharedMemoryStore = agentCreator.getMemoryStore();
             return new ConversationalAgent(agentId, role, llmProvider, toolRegistry, sharedMemoryStore);
         } catch (Exception e) {
             throw new ConductorException("Failed to create LLM tool agent: " + e.getMessage(), e);
@@ -158,17 +158,17 @@ public class AgentFactory {
     }
 
     /**
-     * Creates a ToolUsingAgent using the orchestrator's shared memory store.
+     * Creates a ToolUsingAgent using the agent creator's shared memory store.
      * <p>
-     * This method now properly uses the orchestrator's shared MemoryStore to ensure
+     * This method now properly uses the agent creator's shared MemoryStore to ensure
      * memory consistency between agents. All agents created through workflows will
      * share the same memory context, enabling proper inter-agent communication.
      * </p>
      */
-    private SubAgent createDirectToolAgent(String agentId, String role, Orchestrator orchestrator) throws ConductorException {
+    private SubAgent createDirectToolAgent(String agentId, String role, AgentCreator agentCreator) throws ConductorException {
         try {
-            // Use the orchestrator's shared memory store to ensure consistency
-            MemoryStore sharedMemoryStore = orchestrator.getMemoryStore();
+            // Use the agent creator's shared memory store to ensure consistency
+            MemoryStore sharedMemoryStore = agentCreator.getMemoryStore();
             // Use ConversationalAgent with LLM provider for direct tool mode
             return new ConversationalAgent(agentId, role, getDefaultLLMProvider(), toolRegistry, sharedMemoryStore);
         } catch (Exception e) {

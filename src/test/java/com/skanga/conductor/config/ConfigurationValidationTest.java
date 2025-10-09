@@ -36,14 +36,11 @@ class ConfigurationValidationTest {
     void testInvalidJdbcUrl() {
         System.setProperty("conductor.database.url", "invalid-url");
 
-        com.skanga.conductor.exception.SingletonException.InitializationException exception =
-            assertThrows(com.skanga.conductor.exception.SingletonException.InitializationException.class, () -> {
-                ApplicationConfig.getInstance();
-            });
-
-        // Verify the root cause is ConfigurationException
-        Throwable cause = exception.getCause();
-        assertInstanceOf(com.skanga.conductor.exception.ConfigurationException.class, cause);
+        // Since validation is now deferred, it throws ConfigurationException directly (not wrapped)
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
+            ApplicationConfig config = ApplicationConfig.getInstance();
+            config.validate(); // Validation is now explicit
+        });
     }
 
     @Test
@@ -51,14 +48,11 @@ class ConfigurationValidationTest {
     void testInvalidMaxConnections() {
         System.setProperty("conductor.database.max.connections", "-1");
 
-        com.skanga.conductor.exception.SingletonException.InitializationException exception =
-            assertThrows(com.skanga.conductor.exception.SingletonException.InitializationException.class, () -> {
-                ApplicationConfig.getInstance();
-            });
-
-        // Verify the root cause is ConfigurationException
-        Throwable cause = exception.getCause();
-        assertInstanceOf(com.skanga.conductor.exception.ConfigurationException.class, cause);
+        // Since validation is now deferred, it throws ConfigurationException directly (not wrapped)
+        assertThrows(com.skanga.conductor.exception.ConfigurationException.class, () -> {
+            ApplicationConfig config = ApplicationConfig.getInstance();
+            config.validate(); // Validation is now explicit
+        });
     }
 
     @Test

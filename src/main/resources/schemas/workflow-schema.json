@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://conductor.skanga.com/schemas/workflow.json",
+  "title": "Conductor Workflow Definition",
+  "description": "Schema for validating Conductor workflow YAML files",
+  "type": "object",
+  "required": ["workflow", "stages"],
+  "properties": {
+    "workflow": {
+      "type": "object",
+      "description": "Workflow metadata",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique workflow name",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable workflow description"
+        },
+        "version": {
+          "type": "string",
+          "description": "Workflow version",
+          "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "settings": {
+      "type": "object",
+      "description": "Global workflow settings",
+      "properties": {
+        "output_dir": {
+          "type": "string",
+          "description": "Output directory path (supports variable substitution)"
+        },
+        "max_retries": {
+          "type": "integer",
+          "description": "Maximum retry attempts for failed stages",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Global timeout duration (e.g., '10m', '1h')",
+          "pattern": "^\\d+[smh]$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "variables": {
+      "type": "object",
+      "description": "Workflow variables with default values",
+      "additionalProperties": true
+    },
+    "stages": {
+      "type": "array",
+      "description": "Workflow stages to execute",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/stage"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "stage": {
+      "type": "object",
+      "required": ["name", "agents"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique stage name",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Stage description"
+        },
+        "depends_on": {
+          "type": "array",
+          "description": "List of stage names this stage depends on",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "parallel": {
+          "type": "boolean",
+          "description": "Whether this stage can run in parallel with others",
+          "default": false
+        },
+        "agents": {
+          "type": "object",
+          "description": "Agent role assignments (role -> agent-id mappings)",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "approval": {
+          "$ref": "#/definitions/approval"
+        },
+        "iteration": {
+          "$ref": "#/definitions/iteration"
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Output file patterns",
+          "items": {
+            "type": "string"
+          }
+        },
+        "retry_limit": {
+          "type": "integer",
+          "description": "Stage-specific retry limit",
+          "minimum": 0,
+          "maximum": 10
+        }
+      },
+      "additionalProperties": false
+    },
+    "approval": {
+      "type": "object",
+      "description": "Human approval configuration",
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Whether approval is required",
+          "default": false
+        },
+        "per_item": {
+          "type": "boolean",
+          "description": "Approve each iteration item individually",
+          "default": false
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Approval timeout duration",
+          "pattern": "^\\d+[smh]$"
+        },
+        "auto_approve": {
+          "type": "boolean",
+          "description": "Auto-approve in CI environments",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "iteration": {
+      "type": "object",
+      "description": "Iteration configuration for loops",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Iteration type",
+          "enum": ["data_driven", "count_based", "conditional"]
+        },
+        "source": {
+          "type": "string",
+          "description": "Data source for data_driven iteration (JSON path or variable)"
+        },
+        "count": {
+          "oneOf": [
+            {"type": "integer", "minimum": 1},
+            {"type": "string"}
+          ],
+          "description": "Number of iterations for count_based"
+        },
+        "start": {
+          "type": "integer",
+          "description": "Starting value for count_based iteration",
+          "default": 1
+        },
+        "condition": {
+          "type": "string",
+          "description": "Condition expression for conditional iteration"
+        },
+        "max_iterations": {
+          "type": "integer",
+          "description": "Maximum iterations for conditional type",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "variable": {
+          "type": "string",
+          "description": "Variable name for current item",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+        },
+        "parallel": {
+          "type": "boolean",
+          "description": "Execute iterations in parallel",
+          "default": false
+        },
+        "max_concurrent": {
+          "type": "integer",
+          "description": "Maximum concurrent iterations",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "error_strategy": {
+          "type": "string",
+          "description": "How to handle iteration errors",
+          "enum": ["fail_fast", "continue", "retry"],
+          "default": "fail_fast"
+        },
+        "retry_count": {
+          "type": "integer",
+          "description": "Retry count per iteration",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 0
+        },
+        "iteration_timeout": {
+          "type": "integer",
+          "description": "Per-iteration timeout in milliseconds",
+          "minimum": 1000
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {"type": {"const": "data_driven"}}
+          },
+          "then": {
+            "required": ["source"]
+          }
+        },
+        {
+          "if": {
+            "properties": {"type": {"const": "count_based"}}
+          },
+          "then": {
+            "required": ["count"]
+          }
+        },
+        {
+          "if": {
+            "properties": {"type": {"const": "conditional"}}
+          },
+          "then": {
+            "required": ["condition", "max_iterations"]
+          }
+        }
+      ]
+    }
+  }
+}

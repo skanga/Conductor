@@ -2,12 +2,14 @@ package com.skanga.conductor.provider;
 
 import com.skanga.conductor.config.ApplicationConfig;
 import com.skanga.conductor.exception.ConductorException;
+import com.skanga.conductor.resilience.CircuitBreakerManager;
 import com.skanga.conductor.retry.RetryExecutor;
 import com.skanga.conductor.retry.RetryPolicy;
 
 import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Supplier;
+import com.skanga.conductor.config.LLMConfig;
 
 /**
  * Abstract base class for LLM providers that provides standardized exception handling and retry logic.
@@ -43,12 +45,18 @@ public abstract class AbstractLLMProvider implements LLMProvider {
     protected final RetryExecutor retryExecutor;
     private final String providerName;
     private final String modelName;
+    private final TokenBucketRateLimiter rateLimiter;
 
     /**
-     * Creates a new abstract LLM provider with default retry configuration.
+     * Creates a new abstract LLM provider with default retry configuration and rate limiting.
      * <p>
-     * The retry policy is automatically configured based on application
-     * configuration settings for LLM retry behavior.
+     * The retry policy and rate limiter are automatically configured based on application
+     * configuration settings for LLM retry behavior and rate limiting.
+     * </p>
+     * <p>
+     * Rate limiting helps prevent exceeding API quotas and controls costs by limiting
+     * the number of requests per second. Default is 10 requests/second with a burst
+     * capacity of 20 requests.
      * </p>
      *
      * @param providerName the name of this provider (used for logging and metrics)
@@ -59,9 +67,14 @@ public abstract class AbstractLLMProvider implements LLMProvider {
         this.modelName = modelName;
 
         // Configure retry policy from application configuration
-        ApplicationConfig.LLMConfig llmConfig = ApplicationConfig.getInstance().getLLMConfig();
+        LLMConfig llmConfig = ApplicationConfig.getInstance().getLLMConfig();
         RetryPolicy retryPolicy = createRetryPolicy(llmConfig);
         this.retryExecutor = new RetryExecutor(retryPolicy, this.providerName + "-llm-call");
+
+        // Configure rate limiter: 10 requests/second, burst capacity of 20
+        // This provides reasonable protection against quota exhaustion while
+        // allowing burst traffic within limits
+        this.rateLimiter = new TokenBucketRateLimiter(20, 10);
     }
 
     /**
@@ -69,6 +82,7 @@ public abstract class AbstractLLMProvider implements LLMProvider {
      * <p>
      * This constructor allows full control over the retry behavior,
      * useful for testing or when different retry strategies are needed.
+     * Rate limiting is still applied with default settings.
      * </p>
      *
      * @param providerName the name of this provider (used for logging and metrics)
@@ -79,6 +93,7 @@ public abstract class AbstractLLMProvider implements LLMProvider {
         this.providerName = generateProviderName(providerName);
         this.modelName = modelName;
         this.retryExecutor = new RetryExecutor(retryPolicy, this.providerName + "-llm-call");
+        this.rateLimiter = new TokenBucketRateLimiter(20, 10);
     }
 
     /**
@@ -100,11 +115,12 @@ public abstract class AbstractLLMProvider implements LLMProvider {
     }
 
     /**
-     * Generates text using the LLM with automatic retry logic and standardized exception handling.
+     * Generates text using the LLM with circuit breaker, retry logic and standardized exception handling.
      * <p>
-     * This method implements the common retry pattern for all LLM providers with enhanced
-     * context tracking and standardized exception creation. Concrete implementations should
-     * override {@link #generateInternal(String)} to provide the actual LLM interaction logic.
+     * This method implements the common resilience patterns for all LLM providers with enhanced
+     * context tracking and standardized exception creation. It applies circuit breaker protection
+     * followed by retry logic. Concrete implementations should override {@link #generateInternal(String)}
+     * to provide the actual LLM interaction logic.
      * </p>
      *
      * @param prompt the text prompt to send to the LLM
@@ -116,9 +132,31 @@ public abstract class AbstractLLMProvider implements LLMProvider {
         final String correlationId = UUID.randomUUID().toString();
         final Instant startTime = Instant.now();
         final String operation = "generate_completion";
+        final String serviceName = "llm-" + providerName + "-" + getModelName(prompt);
+
+        // Apply rate limiting before attempting the request
+        // Wait up to 30 seconds for a token to become available
+        try {
+            if (!rateLimiter.acquire(java.time.Duration.ofSeconds(30))) {
+                ProviderExceptionFactory.ProviderContext context =
+                    ProviderExceptionFactory.ProviderContext.builder(providerName)
+                        .model(getModelName(prompt))
+                        .operation(operation)
+                        .duration(30000L)
+                        .correlationId(correlationId)
+                        .build();
+                throw ProviderExceptionFactory.rateLimitExceeded(context, 30);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ConductorException.LLMProviderException("Rate limiter interrupted", e);
+        }
 
         try {
-            return retryExecutor.execute((Supplier<String>) () -> {
+            // Wrap the entire retry execution with circuit breaker protection
+            return CircuitBreakerManager.getInstance().executeWithProtection(
+                serviceName,
+                () -> retryExecutor.execute((Supplier<String>) () -> {
                 final long duration = System.currentTimeMillis() - startTime.toEpochMilli();
                 final int maxAttempts = retryExecutor.getRetryPolicy().getMaxAttempts();
 
@@ -149,7 +187,7 @@ public abstract class AbstractLLMProvider implements LLMProvider {
                             standardizedException.getMessage(), e); // Store original exception as cause
                     }
                 }
-            });
+            }));
         } catch (TransientLLMException e) {
             // Recreate the standardized exception from the original exception
             final long duration = System.currentTimeMillis() - startTime.toEpochMilli();
@@ -277,7 +315,7 @@ public abstract class AbstractLLMProvider implements LLMProvider {
      * @param llmConfig the LLM configuration
      * @return a configured retry policy
      */
-    protected RetryPolicy createRetryPolicy(ApplicationConfig.LLMConfig llmConfig) {
+    protected RetryPolicy createRetryPolicy(LLMConfig llmConfig) {
         // Check if retries are enabled
         if (!llmConfig.isRetryEnabled()) {
             return RetryPolicy.noRetry();

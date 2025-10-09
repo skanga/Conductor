@@ -35,7 +35,7 @@ public class SimpleProviderExceptionTest {
         // Test invalid API key exception
         LLMProviderException exception = ProviderExceptionFactory.invalidApiKey(context, "Invalid format");
 
-        assert exception.getErrorCode().equals(ErrorCodes.LLM_AUTH_INVALID_KEY);
+        assert exception.getErrorCode().equals(ErrorCodes.AUTH_FAILED);
         assert exception.getProviderName().equals("test-provider");
         assert exception.getModelName().equals("test-model");
         assert exception.getContext().getOperation().equals("test-operation");
@@ -60,7 +60,7 @@ public class SimpleProviderExceptionTest {
         // Test rate limit exception
         LLMProviderException exception = ProviderExceptionFactory.rateLimitExceeded(context, 120L);
 
-        assert exception.getErrorCode().equals(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED);
+        assert exception.getErrorCode().equals(ErrorCodes.RATE_LIMIT_EXCEEDED);
         assert exception.getErrorCategory().equals(ExceptionContext.ErrorCategory.RATE_LIMIT);
         assert exception.isRetryable();
         assert exception.getRateLimitResetTime().equals(120L);
@@ -83,7 +83,7 @@ public class SimpleProviderExceptionTest {
         Exception timeoutException = new RuntimeException("Request timeout after 30 seconds");
         LLMProviderException exception = ProviderExceptionFactory.fromException(context, timeoutException);
 
-        assert exception.getErrorCode().equals(ErrorCodes.LLM_TIMEOUT_REQUEST);
+        assert exception.getErrorCode().equals(ErrorCodes.TIMEOUT);
         assert exception.isRetryable();
         assert exception.getCause() == timeoutException;
 

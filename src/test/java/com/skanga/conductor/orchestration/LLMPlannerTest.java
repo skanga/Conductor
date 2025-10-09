@@ -15,24 +15,24 @@ import static org.mockito.Mockito.*;
  * Comprehensive tests for LLMPlanMaker functionality.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class LLMPlanMakerTest extends ConductorTestBase {
+class LLMPlannerTest extends ConductorTestBase {
 
     @Mock
     private LLMProvider mockLLMProvider;
 
-    private LLMPlanMaker planMaker;
+    private LLMPlanner planMaker;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        planMaker = new LLMPlanMaker(mockLLMProvider);
+        planMaker = new LLMPlanner(mockLLMProvider);
     }
 
     @Test
     @Order(1)
     @DisplayName("Should construct with valid LLMProvider")
     void testValidConstruction() {
-        assertDoesNotThrow(() -> new LLMPlanMaker(mockLLMProvider));
+        assertDoesNotThrow(() -> new LLMPlanner(mockLLMProvider));
     }
 
     @Test
@@ -40,7 +40,7 @@ class LLMPlanMakerTest extends ConductorTestBase {
     @DisplayName("Should throw IllegalArgumentException for null LLMProvider")
     void testNullLLMProviderConstruction() {
         assertThrows(IllegalArgumentException.class, () -> {
-            new LLMPlanMaker(null);
+            new LLMPlanner(null);
         });
     }
 

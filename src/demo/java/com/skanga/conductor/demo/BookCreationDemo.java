@@ -2,8 +2,9 @@ package com.skanga.conductor.demo;
 
 import com.skanga.conductor.agent.SubAgentRegistry;
 import com.skanga.conductor.engine.DefaultWorkflowEngine.*;
+import com.skanga.conductor.engine.YamlWorkflowEngine;
+import com.skanga.conductor.engine.WorkflowEngine;
 import com.skanga.conductor.memory.MemoryStore;
-import com.skanga.conductor.workflow.YamlWorkflowEngine;
 import com.skanga.conductor.orchestration.Orchestrator;
 import com.skanga.conductor.provider.LLMProvider;
 import com.skanga.conductor.provider.DemoMockLLMProvider;
@@ -131,19 +132,16 @@ public class BookCreationDemo {
             Orchestrator orchestrator = new Orchestrator(registry, memoryStore);
             LLMProvider llmProvider = createLLMProvider("yaml");
 
-            YamlWorkflowEngine adapter = new YamlWorkflowEngine(orchestrator, llmProvider);
+            YamlWorkflowEngine engine = new YamlWorkflowEngine();
 
-            // Use configured paths
-            adapter.loadConfiguration(
-                "src/main/resources/" + yamlConfig.getWorkflowPath(),
-                "src/main/resources/" + yamlConfig.getAgentsPath(),
-                "src/main/resources/" + yamlConfig.getContextPath()
-            );
-
-            Map<String, Object> context = createExecutionContext(topic, outputDir);
+            // Use configured paths to load workflow definition
+            engine.loadWorkflow("src/main/resources/" + yamlConfig.getWorkflowPath())
+                  .loadAgents("src/main/resources/" + yamlConfig.getAgentsPath())
+                  .loadContext("src/main/resources/" + yamlConfig.getContextPath())
+                  .withOrchestrator(orchestrator, memoryStore);
 
             long startTime = System.currentTimeMillis();
-            WorkflowResult result = adapter.executeWorkflow(context);
+            WorkflowEngine.WorkflowResult result = engine.execute(topic);
             long duration = System.currentTimeMillis() - startTime;
 
             displayYamlResults("YAML Workflow", result, duration, outputDir);
@@ -204,30 +202,23 @@ public class BookCreationDemo {
     }
 
     /**
-     * Displays results for WorkflowResult-based workflows.
+     * Displays results for WorkflowEngine.WorkflowResult-based workflows.
      */
-    private static void displayYamlResults(String workflowName, WorkflowResult result, long duration, String outputDir) {
+    private static void displayYamlResults(String workflowName, WorkflowEngine.WorkflowResult result, long duration, String outputDir) {
         BookCreationUtils.displayHeader(workflowName + " - COMPLETED");
 
         if (result.isSuccess()) {
             System.out.println("✅ Success: YAML workflow completed successfully");
+            System.out.println("📖 Workflow: " + result.getWorkflowName());
             System.out.println("⏱️  Total Time: " + result.getTotalExecutionTimeMs() + "ms");
-            System.out.println("🔄 Stages Executed: " + result.getStageResults().size());
             System.out.println("📁 Output: " + outputDir);
 
-            System.out.println("\nStage Execution Details:");
-            for (StageResult stageResult : result.getStageResults()) {
-                System.out.println("├─ " + stageResult.getStageName() +
-                                 " (attempt " + stageResult.getAttempt() +
-                                 ", " + stageResult.getExecutionTimeMs() + "ms)");
-                if (stageResult.isSuccess()) {
-                    System.out.println("│  ✅ " + BookCreationUtils.truncateOutput(stageResult.getOutput(), 100));
-                } else {
-                    System.out.println("│  ❌ " + stageResult.getError());
-                }
+            if (result.getOutput() != null) {
+                System.out.println("\nWorkflow Output:");
+                System.out.println(BookCreationUtils.truncateOutput(result.getOutput().toString(), 500));
             }
         } else {
-            System.err.println("❌ Workflow failed: " + result.getError());
+            System.err.println("❌ Workflow failed: " + result.getErrorMessage());
         }
     }
 

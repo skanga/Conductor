@@ -1,15 +1,262 @@
 # Conductor Development Guide
 
-This comprehensive guide covers development guidelines, workflows, and best practices for the Conductor AI framework.
+This comprehensive guide covers development environment setup, guidelines, workflows, and best practices for the Conductor AI framework.
 
 ## Table of Contents
 
+- [Quick Start (5 Minutes)](#quick-start-5-minutes)
+- [Development Environment Setup](#development-environment-setup)
+- [IDE Configuration](#ide-configuration)
 - [Development Guidelines](#development-guidelines)
 - [Advanced Development Workflows](#advanced-development-workflows)
 - [Exception Handling](#exception-handling)
 - [Logging Standards](#logging-standards)
 - [Testing Strategies](#testing-strategies)
 - [Code Quality Standards](#code-quality-standards)
+- [Troubleshooting Guide](#troubleshooting-guide)
+
+---
+
+## Quick Start (5 Minutes)
+
+**⚡ Fastest path to running demos**
+
+### Prerequisites Check
+```bash
+# Verify Java 21+
+java --version
+# Should show: openjdk 21.x.x or later
+
+# Verify Maven
+mvn --version
+# Should show: Apache Maven 3.6+
+```
+
+### One-Command Setup
+```bash
+# Clone, build, and run demo
+git clone <repository-url>
+cd Conductor
+mvn clean install && mvn exec:java@book-demo -Dexec.args="Quick Start Demo"
+```
+
+### Expected Output
+```
+✅ Book creation completed!
+Your book 'Quick Start Demo' is ready.
+📁 Check: output/book_quickstartdemo_[timestamp]/
+```
+
+---
+
+## Development Environment Setup
+
+### System Requirements
+
+#### Mandatory Requirements
+| Component | Minimum | Recommended | Notes |
+|-----------|---------|-------------|--------|
+| **Java** | 21.0.0 | 21.0.8+ | LTS version with latest patches |
+| **Maven** | 3.6.0 | 3.9.0+ | For dependency management |
+| **Memory** | 2 GB RAM | 8 GB RAM | For LLM operations |
+| **Storage** | 500 MB | 2 GB | For models and outputs |
+
+#### Optional but Recommended
+| Component | Purpose | Installation |
+|-----------|---------|-------------|
+| **Git** | Version control | [Download](https://git-scm.com/) |
+| **Docker** | Containerized development | [Download](https://docker.com/) |
+| **Node.js** | Documentation tools | [Download](https://nodejs.org/) |
+
+### Java Installation Options
+
+#### Option A: Oracle JDK (Recommended for Production)
+```bash
+# Download from Oracle website
+# https://www.oracle.com/java/technologies/javase/jdk21-archive-downloads.html
+
+# Verify installation
+java --version
+javac --version
+```
+
+#### Option B: OpenJDK (Free Alternative)
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install openjdk-21-jdk
+
+# macOS with Homebrew
+brew install openjdk@21
+
+# Windows with Chocolatey
+choco install openjdk21
+
+# Verify
+echo $JAVA_HOME
+```
+
+#### Option C: SDKMAN (Developer Friendly)
+```bash
+# Install SDKMAN
+curl -s "https://get.sdkman.io" | bash
+source ~/.sdkman/bin/sdkman-init.sh
+
+# Install Java 21
+sdk install java 21.0.8-tem
+sdk use java 21.0.8-tem
+```
+
+### Maven Configuration
+
+```bash
+# Verify Maven installation
+mvn --version
+
+# Configure Maven settings (optional)
+mkdir -p ~/.m2
+cat > ~/.m2/settings.xml <<EOF
+<settings>
+  <mirrors>
+    <mirror>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <mirrorOf>*</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>
+EOF
+```
+
+### Project Setup
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd Conductor
+
+# Build project (includes tests)
+mvn clean install
+
+# Quick compile (skip tests)
+mvn clean compile -DskipTests
+
+# Run demo
+mvn exec:java@book-demo -Dexec.args="My First Topic"
+```
+
+---
+
+## IDE Configuration
+
+### IntelliJ IDEA Setup
+
+**Recommended for Java development**
+
+#### 1. Import Project
+```
+File → Open → Select Conductor directory → Open as Maven Project
+```
+
+#### 2. Configure Java SDK
+```
+File → Project Structure → Project Settings → Project
+- SDK: Choose Java 21
+- Language Level: 21 (Preview)
+```
+
+#### 3. Enable Preview Features
+```
+File → Project Structure → Modules → Select module
+- Language level: 21 (Preview features - Sealed types, pattern matching)
+```
+
+#### 4. Code Style Settings
+```
+File → Settings → Editor → Code Style → Java
+- Import: conductor-code-style.xml (if provided)
+- Or configure:
+  - Tab size: 4
+  - Indent: 4
+  - Continuation indent: 8
+```
+
+#### 5. Run Configurations
+Create run configuration for book demo:
+```
+Run → Edit Configurations → + → Maven
+- Name: Book Demo
+- Command line: exec:java@book-demo -Dexec.args="Test Topic"
+- Working directory: $PROJECT_DIR$
+```
+
+### VS Code Setup
+
+#### 1. Install Extensions
+```
+- Extension Pack for Java (Microsoft)
+- Maven for Java
+- Debugger for Java
+- Test Runner for Java
+```
+
+#### 2. Configure settings.json
+```json
+{
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-21",
+      "path": "/path/to/jdk-21"
+    }
+  ],
+  "java.jdt.ls.java.home": "/path/to/jdk-21",
+  "maven.executable.path": "/path/to/maven/bin/mvn"
+}
+```
+
+#### 3. Tasks Configuration (.vscode/tasks.json)
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Book Demo",
+      "type": "shell",
+      "command": "mvn exec:java@book-demo -Dexec.args='${input:topic}'",
+      "group": "build"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "topic",
+      "type": "promptString",
+      "description": "Enter book topic"
+    }
+  ]
+}
+```
+
+### Eclipse Setup
+
+#### 1. Import Maven Project
+```
+File → Import → Maven → Existing Maven Projects
+- Select Conductor directory
+- Import
+```
+
+#### 2. Configure JDK
+```
+Window → Preferences → Java → Installed JREs
+- Add JDK 21
+- Set as default
+```
+
+#### 3. Enable Preview Features
+```
+Project Properties → Java Compiler
+- Enable preview features: Enabled
+- Compiler compliance level: 21
+```
 
 ---
 
@@ -2278,6 +2525,191 @@ Check `target/surefire-reports/` for detailed test output and stack traces.
 - **Fast execution**: Average test runtime < 50ms
 - **Reliable**: Zero flaky tests in CI
 - **Maintainable**: Clear test structure and documentation
+
+---
+
+## Troubleshooting Guide
+
+### Common Build Issues
+
+#### Java Version Mismatch
+**Problem**: `error: invalid target release: 21`
+**Solution**:
+```bash
+# Verify Java version
+java --version
+
+# Set JAVA_HOME
+export JAVA_HOME=/path/to/jdk-21
+export PATH=$JAVA_HOME/bin:$PATH
+
+# Retry build
+mvn clean install
+```
+
+#### Maven Dependency Resolution Failures
+**Problem**: `Could not resolve dependencies`
+**Solution**:
+```bash
+# Clear Maven cache
+rm -rf ~/.m2/repository
+
+# Force update
+mvn clean install -U
+
+# Use specific mirror
+mvn clean install -Dmaven.repo.remote=https://repo.maven.apache.org/maven2
+```
+
+#### Out of Memory During Build
+**Problem**: `java.lang.OutOfMemoryError: Java heap space`
+**Solution**:
+```bash
+# Increase Maven memory
+export MAVEN_OPTS="-Xmx2g -XX:MaxPermSize=512m"
+
+# Or in .mavenrc
+echo "MAVEN_OPTS=-Xmx2g" > ~/.mavenrc
+```
+
+### Runtime Issues
+
+#### LLM Provider Connection Failures
+**Problem**: `Connection refused` or `API key invalid`
+**Solution**:
+```bash
+# Check API key configuration
+cat src/main/resources/application.properties | grep api.key
+
+# Verify network connectivity
+curl -I https://api.openai.com
+
+# Check proxy settings if behind firewall
+export HTTP_PROXY=http://proxy:8080
+export HTTPS_PROXY=http://proxy:8080
+```
+
+#### Database Lock Errors
+**Problem**: `Database may be already in use`
+**Solution**:
+```bash
+# Close all running demos
+pkill -f "conductor"
+
+# Delete lock files
+rm -f data/*.lock
+rm -f data/*.trace.db
+
+# Restart application
+mvn exec:java@book-demo
+```
+
+#### File Permission Errors
+**Problem**: `Access denied` or `Permission denied`
+**Solution**:
+```bash
+# Fix output directory permissions
+chmod -R 755 output/
+
+# Fix data directory permissions
+chmod -R 755 data/
+
+# Check file ownership
+ls -la data/
+```
+
+### Testing Issues
+
+#### Tests Failing Intermittently
+**Problem**: Random test failures, especially with concurrency
+**Solution**:
+```bash
+# Run with increased timeout
+mvn test -Dtest.timeout.multiplier=2
+
+# Run single test to isolate
+mvn test -Dtest=SpecificTest
+
+# Disable parallel execution
+mvn test -DforkCount=1
+```
+
+#### Mock Provider Issues
+**Problem**: Tests fail with `No LLM provider configured`
+**Solution**:
+```java
+// Ensure test uses MockLLMProvider
+LLMProvider mockProvider = new MockLLMProvider();
+orchestrator = new Orchestrator(mockProvider);
+```
+
+### IDE-Specific Issues
+
+#### IntelliJ: "Cannot resolve symbol"
+**Solution**:
+```
+1. File → Invalidate Caches → Invalidate and Restart
+2. Right-click pom.xml → Maven → Reload Project
+3. File → Project Structure → Verify SDK is Java 21
+```
+
+#### VS Code: Java Extension Not Working
+**Solution**:
+```bash
+# Clean Java workspace
+rm -rf ~/.config/Code/User/workspaceStorage/*
+
+# Reinstall extensions
+code --install-extension vscjava.vscode-java-pack
+
+# Restart VS Code
+```
+
+#### Eclipse: Build Path Errors
+**Solution**:
+```
+1. Project → Clean
+2. Right-click project → Maven → Update Project
+3. Project Properties → Java Build Path → Verify JRE
+```
+
+### Performance Issues
+
+#### Slow Test Execution
+**Solution**:
+```bash
+# Skip performance tests
+mvn test
+
+# Run only fast tests
+mvn test -Dtest="*Test,!*PerformanceTest"
+
+# Use parallel execution
+mvn test -DforkCount=4
+```
+
+#### High Memory Usage
+**Solution**:
+```properties
+# Configure memory limits in application.properties
+conductor.memory.max.entries=1000
+conductor.database.max.connections=10
+conductor.tools.fileread.max.size.bytes=5242880
+```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check Logs**: Review `logs/conductor.log` for detailed error messages
+2. **Enable Debug**: Run with `-Dconductor.logging.level=DEBUG`
+3. **Search Issues**: Check GitHub issues for similar problems
+4. **Ask Community**: Open a new GitHub issue with:
+   - Java version (`java --version`)
+   - Maven version (`mvn --version`)
+   - Operating system
+   - Full error message and stack trace
+   - Steps to reproduce
 
 ---
 

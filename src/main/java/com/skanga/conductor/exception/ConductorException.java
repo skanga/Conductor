@@ -1,7 +1,7 @@
 package com.skanga.conductor.exception;
 
 import com.skanga.conductor.memory.MemoryStore;
-import com.skanga.conductor.orchestration.LLMPlanMaker;
+import com.skanga.conductor.orchestration.LLMPlanner;
 import com.skanga.conductor.orchestration.PlannerOrchestrator;
 import com.skanga.conductor.tools.Tool;
 
@@ -491,7 +491,7 @@ public class ConductorException extends Exception {
      * </p>
      *
      * @since 1.0.0
-     * @see LLMPlanMaker
+     * @see LLMPlanner
      * @see PlannerOrchestrator
      */
     public static class PlannerException extends ConductorException {

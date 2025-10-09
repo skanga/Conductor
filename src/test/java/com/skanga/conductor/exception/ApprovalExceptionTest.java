@@ -44,7 +44,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
     void testMessageAndContextConstructor() {
         String message = "User rejected approval request";
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.APPROVAL_REJECTED)
+            .errorCode(ErrorCodes.INVALID_INPUT)
             .operation("approval_request")
             .metadata("approval.request_id", "req-123")
             .metadata("approval.user_id", "user-456")
@@ -52,7 +52,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
 
         ApprovalException exception = new ApprovalException(message, context);
 
-        assertTrue(exception.getMessage().contains(ErrorCodes.APPROVAL_REJECTED));
+        assertTrue(exception.getMessage().contains(ErrorCodes.INVALID_INPUT));
         assertTrue(exception.getMessage().contains(message));
         assertNull(exception.getCause());
         assertSame(context, exception.getContext());
@@ -66,7 +66,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
         String message = "Approval process failed completely";
         RuntimeException cause = new RuntimeException("Network connection lost");
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.APPROVAL_HANDLER_FAILED)
+            .errorCode(ErrorCodes.EXECUTION_FAILED)
             .operation("approval_communication")
             .metadata("approval.handler_type", "ConsoleApprovalHandler")
             .metadata("approval.timeout_ms", 30000L)
@@ -74,7 +74,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
 
         ApprovalException exception = new ApprovalException(message, cause, context);
 
-        assertTrue(exception.getMessage().contains(ErrorCodes.APPROVAL_HANDLER_FAILED));
+        assertTrue(exception.getMessage().contains(ErrorCodes.EXECUTION_FAILED));
         assertTrue(exception.getMessage().contains(message));
         assertSame(cause, exception.getCause());
         assertSame(context, exception.getContext());
@@ -242,7 +242,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
     @DisplayName("Should handle all approval metadata together")
     void testAllApprovalMetadata() {
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.APPROVAL_TIMEOUT)
+            .errorCode(ErrorCodes.TIMEOUT)
             .operation("approval_timeout")
             .metadata("approval.request_id", "req-comprehensive")
             .metadata("approval.handler_type", "WebApprovalHandler")
@@ -259,7 +259,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
         assertEquals("reviewer-1", exception.getUserId());
         assertEquals("manager@company.com", exception.getEscalationContact());
         assertTrue(exception.hasContext());
-        assertEquals(ErrorCodes.APPROVAL_TIMEOUT, exception.getErrorCode());
+        assertEquals(ErrorCodes.TIMEOUT, exception.getErrorCode());
     }
 
     @Test
@@ -299,7 +299,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
     void testTypicalApprovalScenarios() {
         // Timeout scenario
         ExceptionContext timeoutContext = ExceptionContext.builder()
-            .errorCode(ErrorCodes.APPROVAL_TIMEOUT)
+            .errorCode(ErrorCodes.TIMEOUT)
             .metadata("approval.timeout_ms", 30000L)
             .metadata("approval.handler_type", "ConsoleApprovalHandler")
             .build();
@@ -309,7 +309,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
 
         // Rejection scenario
         ExceptionContext rejectionContext = ExceptionContext.builder()
-            .errorCode(ErrorCodes.APPROVAL_REJECTED)
+            .errorCode(ErrorCodes.INVALID_INPUT)
             .metadata("approval.user_id", "reviewer-2")
             .metadata("approval.request_id", "req-reject-001")
             .build();
@@ -320,7 +320,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
         // Communication failure scenario
         RuntimeException commCause = new RuntimeException("Network error");
         ExceptionContext commContext = ExceptionContext.builder()
-            .errorCode(ErrorCodes.APPROVAL_HANDLER_FAILED)
+            .errorCode(ErrorCodes.EXECUTION_FAILED)
             .metadata("approval.escalation_contact", "admin@company.com")
             .build();
         ApprovalException commException = new ApprovalException("Communication with approval handler failed", commCause, commContext);
@@ -344,7 +344,7 @@ class ApprovalExceptionTest extends ConductorTestBase {
     void testDetailedSummaryWithContext() {
         String message = "Approval workflow failed";
         ExceptionContext context = ExceptionContext.builder()
-            .errorCode(ErrorCodes.APPROVAL_TIMEOUT)
+            .errorCode(ErrorCodes.TIMEOUT)
             .operation("workflow_approval")
             .correlationId("workflow-123")
             .metadata("approval.request_id", "req-summary-test")

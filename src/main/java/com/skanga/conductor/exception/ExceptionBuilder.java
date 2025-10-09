@@ -17,7 +17,7 @@ import java.util.Map;
  * <pre>
  * // LLM Provider Exception with context
  * throw ExceptionBuilder.llmProvider("OpenAI request failed")
- *     .errorCode(ErrorCodes.LLM_RATE_LIMIT_EXCEEDED)
+ *     .errorCode(ErrorCodes.RATE_LIMIT_EXCEEDED)
  *     .operation("generate_completion")
  *     .provider("openai", "gpt-4")
  *     .httpStatus(429)
@@ -27,7 +27,7 @@ import java.util.Map;
  *
  * // Tool Execution Exception with fallback
  * throw ExceptionBuilder.toolExecution("File read failed")
- *     .errorCode(ErrorCodes.TOOL_EXECUTION_FAILED)
+ *     .errorCode(ErrorCodes.EXECUTION_FAILED)
  *     .tool("file_reader", "io")
  *     .fallbackTool("backup_reader")
  *     .validationError("File not found: " + filename)
@@ -36,7 +36,7 @@ import java.util.Map;
  *
  * // Configuration Exception
  * throw ExceptionBuilder.configuration("Invalid database URL")
- *     .errorCode(ErrorCodes.CONFIG_DATABASE_URL_INVALID)
+ *     .errorCode(ErrorCodes.CONFIGURATION_ERROR)
  *     .operation("database_initialization")
  *     .metadata("url", invalidUrl)
  *     .fixConfiguration()
@@ -175,8 +175,7 @@ public final class ExceptionBuilder {
      */
     public ExceptionBuilder errorCode(String errorCode) {
         this.errorCode = errorCode;
-        this.category = ErrorCodes.getCategoryForCode(errorCode);
-        this.recoveryHint = ErrorCodes.getRecoveryHintForCode(errorCode);
+        this.category = ErrorCodes.toExceptionContextCategory(errorCode);
         return this;
     }
 

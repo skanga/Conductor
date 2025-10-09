@@ -30,8 +30,8 @@ public class ApplicationConfigDryTest {
 
     @Test
     void testGenericProviderConfigurationOpenAi() {
-        ApplicationConfig.LLMConfig llmConfig = config.getLLMConfig();
-        ApplicationConfig.ProviderConfig openaiConfig = llmConfig.getProviderConfig("openai");
+        LLMConfig llmConfig = config.getLLMConfig();
+        LLMConfig.ProviderConfig openaiConfig = llmConfig.getProviderConfig("openai");
 
         // Test that generic provider config returns correct defaults
         assertEquals("gpt-3.5-turbo", openaiConfig.getModel());
@@ -49,8 +49,8 @@ public class ApplicationConfigDryTest {
 
     @Test
     void testGenericProviderConfigurationAnthropic() {
-        ApplicationConfig.LLMConfig llmConfig = config.getLLMConfig();
-        ApplicationConfig.ProviderConfig anthropicConfig = llmConfig.getProviderConfig("anthropic");
+        LLMConfig llmConfig = config.getLLMConfig();
+        LLMConfig.ProviderConfig anthropicConfig = llmConfig.getProviderConfig("anthropic");
 
         // Test that generic provider config returns correct defaults
         assertEquals("claude-3-5-sonnet-20241022", anthropicConfig.getModel());
@@ -67,8 +67,8 @@ public class ApplicationConfigDryTest {
 
     @Test
     void testGenericProviderConfigurationGemini() {
-        ApplicationConfig.LLMConfig llmConfig = config.getLLMConfig();
-        ApplicationConfig.ProviderConfig geminiConfig = llmConfig.getProviderConfig("gemini");
+        LLMConfig llmConfig = config.getLLMConfig();
+        LLMConfig.ProviderConfig geminiConfig = llmConfig.getProviderConfig("gemini");
 
         // Test that generic provider config returns correct defaults
         assertEquals("gemini-pro", geminiConfig.getModel());
@@ -84,10 +84,10 @@ public class ApplicationConfigDryTest {
 
     @Test
     void testGenericProviderConfigurationNewProvider() {
-        ApplicationConfig.LLMConfig llmConfig = config.getLLMConfig();
+        LLMConfig llmConfig = config.getLLMConfig();
 
         // Test that we can create configuration for a new provider not in defaults
-        ApplicationConfig.ProviderConfig newProviderConfig = llmConfig.getProviderConfig("newprovider");
+        LLMConfig.ProviderConfig newProviderConfig = llmConfig.getProviderConfig("newprovider");
 
         assertEquals("newprovider", newProviderConfig.getProviderName());
         assertNull(newProviderConfig.getModel()); // No default model

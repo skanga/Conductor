@@ -1,0 +1,5 @@
+The gap between "production-ready" and "enterprise-grade":
+
+  1. Streaming - Modern LLM apps need real-time responses
+  2. Observability - Production systems require Prometheus/OpenTelemetry
+  3. Security - Container isolation is the standard for code execution

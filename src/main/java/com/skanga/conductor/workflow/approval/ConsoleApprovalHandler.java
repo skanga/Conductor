@@ -191,10 +191,13 @@ public class ConsoleApprovalHandler implements HumanApprovalHandler {
 
     /**
      * Parses a timeout string like "5m", "30s", "2h" into milliseconds.
+     * Uses configured default timeout if parsing fails or input is null.
      */
     public static long parseTimeout(String timeoutString) {
+        long defaultTimeout = getDefaultTimeout();
+
         if (timeoutString == null || timeoutString.trim().isEmpty()) {
-            return 300000; // Default 5 minutes
+            return defaultTimeout;
         }
 
         String clean = timeoutString.trim().toLowerCase();
@@ -213,8 +216,23 @@ public class ConsoleApprovalHandler implements HumanApprovalHandler {
                 return Long.parseLong(clean) * 1000;
             }
         } catch (NumberFormatException e) {
-            logger.warn("Invalid timeout format '{}', using default 5 minutes", timeoutString);
-            return 300000; // Default 5 minutes
+            logger.warn("Invalid timeout format '{}', using default timeout", timeoutString);
+            return defaultTimeout;
+        }
+    }
+
+    /**
+     * Gets the default timeout from configuration.
+     */
+    private static long getDefaultTimeout() {
+        try {
+            return com.skanga.conductor.config.ApplicationConfig.getInstance()
+                .getWorkflowConfig()
+                .getApprovalDefaultTimeout()
+                .toMillis();
+        } catch (Exception e) {
+            // Fallback if config is not available
+            return 300000; // 5 minutes
         }
     }
 
